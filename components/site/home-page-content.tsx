@@ -4,6 +4,11 @@ import type * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
+  ClipboardText,
+  Package,
+  HandCoins,
+} from "@phosphor-icons/react";
+import {
   HelmetIcon,
   JacketIcon,
   GloveIcon,
@@ -13,14 +18,9 @@ import {
 import {
   uiBody,
   uiBodySm,
-  uiBtnPrimaryWide,
-  uiCard,
-  uiCardLift,
   uiHeadingCard,
-  uiHeadingDisplay,
   uiHeadingSection,
   uiLinkSubtle,
-  uiMotionHoverTap,
   uiOverline,
 } from "@/lib/ui/site-ui";
 import { LiveProductMarquee } from "@/components/home/live-product-marquee";
@@ -37,19 +37,19 @@ const categoryItems = [
 
 const howSteps = [
   {
-    step: "1",
     title: "Estimez",
     body: "Sélectionnez votre équipement en quelques clics et recevez une offre alignée sur le marché.",
+    Icon: ClipboardText,
   },
   {
-    step: "2",
     title: "Expédiez",
     body: "Emballez votre article : étiquette et mode d’envoi sécurisé vous sont indiqués.",
+    Icon: Package,
   },
   {
-    step: "3",
     title: "Recevez votre paiement",
     body: "Après contrôle, le montant convenu vous est versé rapidement, sans surprise.",
+    Icon: HandCoins,
   },
 ] as const;
 
@@ -59,67 +59,170 @@ const fadeUpViewport = {
   amount: 0.25,
 };
 
+/** Constellation hero : 5 icônes métier, positions en % pour un rendu “éditorial”. */
+const heroIconLayout = [
+  {
+    Icon: HelmetIcon,
+    position:
+      "left-1/2 top-[6%] -translate-x-1/2 sm:top-[8%]",
+    iconClass: "size-[7.25rem] text-slate-800 sm:size-[8.25rem]",
+    delay: 0,
+    floatDuration: 5.2,
+  },
+  {
+    Icon: JacketIcon,
+    position: "right-[2%] top-[20%] sm:right-[6%] sm:top-[22%]",
+    iconClass: "size-[5.25rem] text-emerald-800/90 sm:size-24",
+    delay: 0.08,
+    floatDuration: 4.6,
+  },
+  {
+    Icon: GloveIcon,
+    position: "bottom-[16%] left-[4%] sm:bottom-[18%] sm:left-[7%]",
+    iconClass: "size-20 text-slate-700 sm:size-24",
+    delay: 0.16,
+    floatDuration: 4.9,
+  },
+  {
+    Icon: PantIcon,
+    position:
+      "bottom-[6%] left-1/2 -translate-x-1/2 sm:bottom-[8%] sm:left-[40%] sm:translate-x-0",
+    iconClass: "w-[4.25rem] text-slate-800 sm:w-[5rem]",
+    delay: 0.24,
+    floatDuration: 5.5,
+  },
+  {
+    Icon: BootIcon,
+    position: "right-[6%] bottom-[8%] sm:right-[10%]",
+    iconClass: "size-[5.5rem] text-slate-800 sm:size-24",
+    delay: 0.32,
+    floatDuration: 4.4,
+  },
+] as const;
+
 type HomePageContentProps = {
-  /** Produits catalogue pour le bandeau sous le hero (depuis `app/page.tsx`). */
   marqueeProducts: MarqueeCatalogProduct[];
 };
 
 export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
   return (
     <div className="flex flex-col">
-      <section className="relative overflow-hidden">
+      {/* ——— Hero ——— */}
+      <section className="relative overflow-hidden border-b border-slate-200/60">
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.35]"
+          className="pointer-events-none absolute inset-0 opacity-[0.42]"
           aria-hidden
           style={{
             background:
-              "radial-gradient(ellipse 80% 55% at 100% 0%, rgba(16,185,129,0.09) 0%, transparent 55%), radial-gradient(ellipse 60% 45% at 0% 100%, rgba(15,23,42,0.04) 0%, transparent 50%)",
+              "radial-gradient(ellipse 85% 60% at 100% 0%, rgba(16,185,129,0.11) 0%, transparent 55%), radial-gradient(ellipse 55% 50% at 0% 100%, rgba(15,23,42,0.06) 0%, transparent 52%), radial-gradient(ellipse 50% 40% at 50% 80%, rgba(16,185,129,0.05) 0%, transparent 45%)",
           }}
         />
-        <div className="relative mx-auto max-w-6xl px-6 py-16 sm:px-8 sm:py-20 md:py-28 lg:px-10">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.55,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-            className="mx-auto max-w-3xl text-center"
-          >
-            <h1
-              className={cn(
-                "text-balance text-4xl sm:text-5xl sm:leading-[1.05] lg:text-6xl",
-                uiHeadingDisplay
-              )}
-            >
-              <span className="block">L’Argus leader de l’équipement moto.</span>
-              <span className="mx-auto mt-5 block max-w-xl text-pretty text-xl font-bold leading-snug tracking-tight text-slate-600 sm:mt-6 sm:text-2xl sm:leading-snug lg:text-[1.65rem]">
-                Estimez et vendez vos articles en 2 minutes.
-              </span>
-            </h1>
-            <div className="mt-12 flex flex-col items-center gap-4 sm:mt-14">
-              <motion.div {...uiMotionHoverTap}>
-                <Link
-                  href="/estimer"
-                  prefetch={false}
+        <div className="relative mx-auto max-w-6xl px-6 py-16 sm:px-8 sm:py-20 md:py-24 lg:px-10 lg:py-28">
+          <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-12">
+            <div className="mx-auto max-w-xl text-center lg:mx-0 lg:max-w-none lg:text-left">
+              <motion.div
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <h1
                   className={cn(
-                    uiBtnPrimaryWide,
-                    "no-underline text-white hover:text-white"
+                    "text-balance font-extrabold tracking-tighter text-slate-900",
+                    "text-4xl sm:text-5xl sm:leading-[1.04] md:text-6xl lg:text-7xl xl:text-[5.25rem] xl:leading-[1.02]"
                   )}
                 >
-                  Estimer mon équipement
-                </Link>
+                  L’Argus leader de l’équipement moto.
+                </h1>
+                <p
+                  className={cn(
+                    "mt-6 max-w-xl text-pretty text-lg font-medium leading-relaxed text-slate-600 sm:mt-7 sm:text-xl sm:leading-snug lg:mx-0 lg:max-w-lg"
+                  )}
+                >
+                  Estimez et vendez vos articles en 2 minutes. La cote de
+                  l’occasion certifiée par des experts.
+                </p>
+                <div className="mt-10 flex flex-col items-center gap-4 sm:mt-12 lg:items-start">
+                  <motion.div
+                    whileHover={{ y: -3 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                  >
+                    <Link
+                      href="/estimer"
+                      prefetch={false}
+                      className={cn(
+                        "inline-flex min-h-14 w-full max-w-md items-center justify-center rounded-3xl bg-emerald-600 px-10",
+                        "text-base font-semibold tracking-tight text-white shadow-lg sm:text-lg",
+                        "transition-[background-color,box-shadow,transform] duration-200",
+                        "hover:bg-emerald-700 hover:shadow-xl focus-visible:outline-none",
+                        "focus-visible:ring-2 focus-visible:ring-emerald-500/45 focus-visible:ring-offset-2",
+                        "active:scale-[0.98] no-underline hover:text-white"
+                      )}
+                    >
+                      Estimer mon équipement
+                    </Link>
+                  </motion.div>
+                  <Link href="#comment-ca-marche" className={uiLinkSubtle}>
+                    Comment ça marche
+                  </Link>
+                </div>
               </motion.div>
-              <Link href="#comment-ca-marche" className={uiLinkSubtle}>
-                Comment ça marche
-              </Link>
             </div>
-          </motion.div>
+
+            <div
+              className="relative mx-auto aspect-square w-full max-w-md lg:mx-0 lg:max-w-none lg:aspect-auto lg:min-h-[380px]"
+              aria-hidden
+            >
+              <div className="absolute inset-0 rounded-3xl border border-slate-200/50 bg-white/40 shadow-sm ring-1 ring-slate-200/30 backdrop-blur-[2px]" />
+              <div className="relative h-full min-h-[320px] sm:min-h-[380px]">
+                {heroIconLayout.map(
+                  ({ Icon, position, iconClass, delay, floatDuration }, i) => (
+                    <motion.div
+                      key={i}
+                      className={cn("absolute", position)}
+                      initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
+                      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                      transition={{
+                        duration: 0.75,
+                        delay: 0.15 + delay,
+                        ease: [0.22, 1, 0.36, 1],
+                      }}
+                    >
+                      <motion.div
+                        className="drop-shadow-[0_10px_28px_rgba(15,23,42,0.12)]"
+                        animate={{ y: [0, -7, 0] }}
+                        transition={{
+                          duration: floatDuration,
+                          repeat: Number.POSITIVE_INFINITY,
+                          ease: "easeInOut",
+                          delay: i * 0.12,
+                        }}
+                      >
+                        <Icon className={iconClass} aria-hidden />
+                      </motion.div>
+                    </motion.div>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
+      {/* ——— Marquee ——— */}
       <div className="border-b border-slate-200/80 bg-white">
-        <LiveProductMarquee products={marqueeProducts} />
+        <div className="mx-auto max-w-6xl px-6 pt-10 sm:px-8 sm:pt-12 lg:px-10">
+          <p
+            className={cn(
+              uiOverline,
+              "text-center text-[11px] text-slate-600 sm:text-xs"
+            )}
+          >
+            Ils nous ont fait confiance pour leur équipement.
+          </p>
+        </div>
+        <div className="pb-6 pt-8 sm:pb-8 sm:pt-10">
+          <LiveProductMarquee products={marqueeProducts} />
+        </div>
       </div>
 
       <section
@@ -134,7 +237,7 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             className="text-center"
           >
-            <p id="categories-heading" className={cn("text-xs tracking-[0.2em]", uiOverline)}>
+            <p id="categories-heading" className={cn(uiOverline)}>
               Équipements repris
             </p>
           </motion.div>
@@ -149,10 +252,8 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
               <li key={id} className="flex flex-col items-center gap-3">
                 <motion.div
                   className={cn(
-                    "flex size-24 items-center justify-center backdrop-blur-sm sm:size-28",
-                    uiCard,
-                    uiCardLift,
-                    "bg-white/90"
+                    "flex size-24 items-center justify-center rounded-3xl border border-slate-200 bg-white shadow-sm backdrop-blur-sm sm:size-28",
+                    "transition-shadow duration-300 hover:shadow-md"
                   )}
                   animate={{ y: [0, -5, 0] }}
                   transition={{
@@ -185,7 +286,7 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={fadeUpViewport}
         transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-        className="py-16 sm:py-20 md:py-24"
+        className="bg-white py-16 sm:py-20 md:py-24"
         style={{ scrollMarginTop: "5.5rem" }}
         aria-labelledby="how-heading"
       >
@@ -196,10 +297,10 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
           <p className={cn("mx-auto mt-4 max-w-lg text-center sm:text-lg", uiBody)}>
             Un parcours clair, du premier clic au virement.
           </p>
-          <div className="mt-12 grid gap-8 sm:grid-cols-3 sm:gap-6 lg:mt-14 lg:gap-8">
-            {howSteps.map(({ step, title, body }, i) => (
+          <div className="mt-12 grid gap-6 sm:grid-cols-3 sm:gap-6 lg:mt-14 lg:gap-8">
+            {howSteps.map(({ title, body, Icon }, i) => (
               <motion.article
-                key={step}
+                key={title}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={fadeUpViewport}
@@ -208,13 +309,21 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
                   delay: i * 0.1,
                   ease: [0.22, 1, 0.36, 1],
                 }}
-                className={cn(uiCard, uiCardLift, "px-6 py-8 sm:px-7 sm:py-9")}
+                className={cn(
+                  "rounded-3xl border border-slate-200 bg-white px-7 py-9 shadow-sm sm:px-8 sm:py-10"
+                )}
               >
-                <span className="inline-flex size-11 items-center justify-center rounded-2xl bg-emerald-600 text-sm font-bold tabular-nums text-white shadow-sm">
-                  {step}
-                </span>
-                <h3 className={cn("mt-5", uiHeadingCard)}>{title}</h3>
-                <p className={cn("mt-3 sm:text-[15px]", uiBodySm)}>{body}</p>
+                <div className="flex justify-center">
+                  <Icon
+                    className="size-16 shrink-0 text-emerald-600"
+                    weight="duotone"
+                    aria-hidden
+                  />
+                </div>
+                <h3 className={cn("mt-6 text-center", uiHeadingCard)}>{title}</h3>
+                <p className={cn("mt-3 text-center sm:text-[15px]", uiBodySm)}>
+                  {body}
+                </p>
               </motion.article>
             ))}
           </div>
