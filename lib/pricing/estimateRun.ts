@@ -9,7 +9,10 @@ import {
   adjustRetailForEstimateDetails,
   type EstimateDetailInput,
 } from "@/lib/pricing/estimateDetails";
-import { computeRetailNetOffer } from "@/lib/pricing/retailMatrix";
+import {
+  computeResidualReferenceEur,
+  computeRetailNetOffer,
+} from "@/lib/pricing/retailMatrix";
 
 /** Souveraineté catalogue : match trigram + fraîcheur 7 j. */
 const MIN_INSTANT_SIMILARITY = 0.85;
@@ -43,6 +46,8 @@ export type EstimateSuccessBody = {
     retailPrice: number;
   };
   offer: number;
+  /** Valeur résiduelle indicative (revente occasion typique), avant marge rachat. */
+  estimatedResaleEur: number;
   confidenceScore?: number | null;
   confidence_score?: number | null;
   sourcesFound?: number | null;
@@ -215,6 +220,11 @@ async function orchestrateAfterCatalogMatch(
       row!.category,
       condition
     );
+    const estimatedResaleEur = computeResidualReferenceEur(
+      adjustedRetail,
+      row!.category,
+      condition
+    );
     const certifiedArgusMoto = similarity >= CERTIFIED_ARGUS_MIN_SIMILARITY;
     return {
       ok: true,
@@ -229,6 +239,7 @@ async function orchestrateAfterCatalogMatch(
           retailPrice: retail,
         },
         offer,
+        estimatedResaleEur,
         needsReview: detailReview,
         certifiedArgusMoto,
       },
@@ -369,6 +380,11 @@ async function orchestrateAfterCatalogMatch(
   const { adjustedRetail, needsReview: detailReview } =
     adjustRetailForEstimateDetails(livePrice, category, details);
   const offer = computeRetailNetOffer(adjustedRetail, category, condition);
+  const estimatedResaleEur = computeResidualReferenceEur(
+    adjustedRetail,
+    category,
+    condition
+  );
   const certifiedArgusMoto =
     row != null && similarity >= CERTIFIED_ARGUS_MIN_SIMILARITY;
   return {
@@ -384,6 +400,7 @@ async function orchestrateAfterCatalogMatch(
         retailPrice: livePrice,
       },
       offer,
+      estimatedResaleEur,
       confidenceScore: live!.confidence,
       confidence_score: live!.confidence,
       sourcesFound: live!.sourcesFound,

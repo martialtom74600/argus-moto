@@ -8,7 +8,10 @@ import {
 import { computeArgusPredictivePrice } from "@/lib/pricing/argus";
 import { adjustRetailForEstimateDetails } from "@/lib/pricing/estimateDetails";
 import type { EstimateDetailInput } from "@/lib/pricing/estimateDetails";
-import { computeRetailNetOffer } from "@/lib/pricing/retailMatrix";
+import {
+  computeResidualReferenceEur,
+  computeRetailNetOffer,
+} from "@/lib/pricing/retailMatrix";
 import { estimateRequestSchema } from "@/lib/validation/estimateBody";
 
 /**
@@ -55,6 +58,11 @@ function buildSovereignArgusFallback(
     input.category,
     input.condition
   );
+  const estimatedResaleEur = computeResidualReferenceEur(
+    adjustedRetail,
+    input.category,
+    input.condition
+  );
 
   return {
     success: true,
@@ -66,6 +74,7 @@ function buildSovereignArgusFallback(
       retailPrice,
     },
     offer,
+    estimatedResaleEur,
     confidenceScore: 62,
     confidence_score: 62,
     sourcesFound: 0,

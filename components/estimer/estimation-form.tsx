@@ -11,6 +11,7 @@ import {
   Footprints,
   HardHat,
   Hand,
+  Package,
   Shield,
   Shirt,
 } from "lucide-react";
@@ -140,6 +141,8 @@ type FlowPhase = "form" | "analyzing" | "result";
 type EstimateOfferResult = {
   kind: "offer";
   offer: number;
+  /** Revente occasion typique (indicatif), même logique que le moteur. */
+  estimatedResaleEur?: number;
   match: { brand: string; model: string; retailPrice: number };
   pricingSource: "catalog_instant" | "internal_crawler" | "argus_predictif";
   needsReview?: boolean;
@@ -558,9 +561,15 @@ export function EstimationForm() {
           ps === "argus_predictif"
             ? ps
             : "argus_predictif";
+        const resaleRaw = d.estimatedResaleEur ?? d.estimated_resale_eur;
+        const estimatedResaleEur =
+          typeof resaleRaw === "number" && Number.isFinite(resaleRaw)
+            ? Math.round(resaleRaw)
+            : undefined;
         setEstimateResult({
           kind: "offer",
           offer,
+          ...(estimatedResaleEur != null ? { estimatedResaleEur } : {}),
           match: { brand: mb, model: mm, retailPrice: mr },
           pricingSource,
           needsReview: d.needsReview === true,
@@ -1157,6 +1166,7 @@ export function EstimationForm() {
     if (estimateResult?.kind !== "offer") return null;
     const {
       offer,
+      estimatedResaleEur,
       match,
       needsReview,
       confidenceScore,
@@ -1169,6 +1179,11 @@ export function EstimationForm() {
 
     const emailBody = [
       `Prix de rachat proposé : ${offer} € (montant versé, frais et marge revente déjà pris en compte).`,
+      ...(typeof estimatedResaleEur === "number" && estimatedResaleEur > 0
+        ? [
+            `Revente occasion indicative (marché) : env. ${estimatedResaleEur} €`,
+          ]
+        : []),
       `${match.brand} ${match.model}`,
       `Réf. neuf ${match.retailPrice} €`,
       `${equipmentLabel} · ${conditionLabel}`,
@@ -1177,142 +1192,305 @@ export function EstimationForm() {
       `Rachat proposé — ${offer} €`
     )}&body=${encodeURIComponent(emailBody)}`;
 
+    const recapImageUrl = catalogSlug
+      ? (catalogModels.find((r) => r.canonical_slug === catalogSlug)
+          ?.image_url ?? null)
+      : null;
+    const EquipIcon = equipment
+      ? (equipmentOptions.find((e) => e.id === equipment)?.icon ?? HardHat)
+      : HardHat;
+    const completenessLabel =
+      COMPLETENESS_OPTIONS.find((o) => o.id === completeness)?.label ?? "";
+    const helmetAgeLabel =
+      equipment === "casque" && helmetAgeBand
+        ? HELMET_AGE_OPTIONS.find((o) => o.id === helmetAgeBand)?.label
+        : null;
+    const retailFmt = new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "EUR",
+      maximumFractionDigits: 0,
+    }).format(match.retailPrice);
+
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={springTransition}
-        className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-5 pb-6 pt-4 text-center"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"
       >
-        <div className="flex min-h-0 w-full max-w-lg flex-col items-center gap-3 overflow-hidden">
-          <h2 className="text-2xl font-semibold tracking-tight text-[#0a0a0a]">
-            Prix de rachat proposé
-          </h2>
-          <p className="max-w-sm text-base leading-relaxed text-neutral-600">
-            Voici le montant que nous vous versons si vous cédez l’article dans
-            l’état indiqué. Il inclut déjà nos frais (contrôle, logistique) et la
-            marge nécessaire pour que nous puissions le racheter, le traiter et
-            le revendre — un juste milieu pour que la reprise reste intéressante
-            pour vous et viable pour nous.
-          </p>
-          <p className="max-w-sm text-sm leading-snug text-neutral-500">
-            Estimation indicative, valable 7 jours. Paiement sécurisé sous 48 h
-            après réception et vérification.
-          </p>
+        <div
+          className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-10 px-5 pb-8 pt-6 sm:gap-12 sm:pb-10 sm:pt-8 lg:grid-cols-12 lg:items-start lg:gap-14"
+          style={{
+            paddingBottom: `max(2rem, env(safe-area-inset-bottom), ${keyboardPad}px)`,
+          }}
+        >
+          {/* Colonne estimation */}
+          <div className="flex flex-col lg:col-span-7">
+            <div className="flex flex-col gap-4 text-center lg:max-w-xl lg:text-left">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-neutral-400">
+                Estimation terminée
+              </p>
+              <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[#0a0a0a] sm:text-4xl">
+                Prix de rachat proposé
+              </h2>
+              <p className="text-base leading-relaxed text-neutral-600 sm:text-[17px]">
+                Montant que nous vous versons pour cet article, dans l’état
+                indiqué. Il inclut nos frais de contrôle et de logistique, ainsi
+                que la marge nécessaire pour une revente sereine — un équilibre
+                juste pour vous comme pour nous.
+              </p>
+              <p className="text-sm leading-snug text-neutral-500">
+                Indicatif, valable 7 jours. Paiement sous 48 h après réception et
+                vérification.
+              </p>
+            </div>
 
-          {certifiedArgusMoto && (
-            <span
-              className={cn(
-                "rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em]",
-                "border border-[#1d5efa]/25 bg-gradient-to-r from-[#1d5efa]/8 to-amber-500/15 text-[#1746cf]"
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+              {certifiedArgusMoto && (
+                <span
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em]",
+                    "border border-[#1d5efa]/25 bg-gradient-to-r from-[#1d5efa]/8 to-amber-500/15 text-[#1746cf]"
+                  )}
+                >
+                  Certifié Argus
+                </span>
               )}
-            >
-              Certifié Argus
-            </span>
-          )}
+            </div>
 
-          <p
-            className="text-7xl font-semibold tracking-tighter text-[#0a0a0a] tabular-nums sm:text-8xl"
-            aria-label={`Montant que nous vous versons : ${offer} euros`}
-          >
-            {offer}
-            <span className="text-3xl font-medium text-neutral-400 sm:text-4xl">
-              {" "}
-              €
-            </span>
-          </p>
+            <div className="mt-6 flex flex-col items-center lg:items-start">
+              <p
+                className="text-7xl font-semibold tracking-[-0.04em] text-[#0a0a0a] tabular-nums sm:text-8xl lg:text-[7.5rem] lg:leading-[0.95]"
+                aria-label={`Montant que nous vous versons : ${offer} euros`}
+              >
+                {offer}
+                <span className="text-3xl font-medium text-neutral-300 sm:text-4xl lg:text-5xl">
+                  {" "}
+                  €
+                </span>
+              </p>
+              <p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-neutral-400">
+                versés à vous · tout compris
+              </p>
+            </div>
 
-          <p className="max-w-xs text-xs font-medium uppercase tracking-[0.12em] text-neutral-400">
-            versés à vous · tout compris
-          </p>
+            {typeof estimatedResaleEur === "number" && estimatedResaleEur > 0 ? (
+              <div
+                className={cn(
+                  "mx-auto mt-8 w-full max-w-md rounded-2xl border border-emerald-200/70",
+                  "bg-gradient-to-br from-emerald-50/95 via-white to-teal-50/30",
+                  "px-5 py-5 text-center shadow-[0_12px_36px_-20px_rgba(5,150,105,0.35)]",
+                  "lg:mx-0 lg:text-left"
+                )}
+              >
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-800/75">
+                  Revente occasion — ordre de grandeur
+                </p>
+                <p className="mt-2 text-4xl font-semibold tabular-nums tracking-tight text-emerald-950 sm:text-5xl">
+                  ~{estimatedResaleEur}
+                  <span className="text-2xl font-medium text-emerald-700/55 sm:text-3xl">
+                    {" "}
+                    €
+                  </span>
+                </p>
+                <p className="mt-1 text-xs font-medium text-emerald-800/70">
+                  indicatif marché
+                </p>
+                <p className="mt-3 text-sm leading-relaxed text-emerald-950/85">
+                  C’est le niveau de prix auquel nous pouvons typiquement
+                  repositionner un équivalent sur l’occasion après la reprise —
+                  avant négociation avec le prochain acheteur. Cela explique
+                  l’écart avec le montant que nous vous payons aujourd’hui.
+                </p>
+              </div>
+            ) : null}
 
-          <p className="max-w-sm text-sm leading-relaxed tracking-wide text-neutral-500">
-            Référence prix neuf{" "}
-            {new Intl.NumberFormat("fr-FR", {
-              style: "currency",
-              currency: "EUR",
-              maximumFractionDigits: 0,
-            }).format(match.retailPrice)}
-            <span className="text-neutral-400">
-              {" "}
-              — nos frais (dont env. {LOGISTICS_FIXED_EUR} € pour la logistique
-              et le traitement) sont déjà déduits dans le montant ci-dessus.
-            </span>
-            <br />
-            <span className="text-neutral-700">
-              {match.brand} {match.model}
-            </span>
-          </p>
-
-          {isOfficialFeed && (
-            <p className="max-w-sm rounded-2xl border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs tracking-wide text-blue-950">
-              Cote Officielle {retailerSource ?? "Data Lake"} basée sur{" "}
-              {Math.max(1, sourcesFound ?? 1)} sources analysées
+            <p className="mx-auto mt-6 max-w-md text-center text-sm leading-relaxed text-neutral-500 lg:mx-0 lg:text-left">
+              Basé sur une référence neuf à{" "}
+              <span className="font-medium text-neutral-700">{retailFmt}</span>.
+              Nos frais (dont env. {LOGISTICS_FIXED_EUR} € logistique et
+              traitement) sont déjà déduits de ce montant.
             </p>
-          )}
 
-          {pricingSource === "argus_predictif" && (
-            <p className="max-w-sm rounded-2xl border border-violet-100 bg-violet-50/70 px-3 py-2 text-xs tracking-wide text-violet-950">
-              Mode souverain prédictif actif (marché live indisponible)
-            </p>
-          )}
-
-          {needsReview && (
-            <p className="max-w-sm rounded-2xl border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs tracking-wide text-amber-950">
-              Reprise à confirmer
-              {typeof confidenceScore === "number"
-                ? ` · ${Math.round(confidenceScore)} %`
-                : ""}
-            </p>
-          )}
-
-          {typeof confidenceScore === "number" && confidenceScore < 70 && (
-            <p className="max-w-sm rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs tracking-wide text-neutral-700">
-              Estimation basée sur un échantillon restreint, validation manuelle recommandée
-            </p>
-          )}
-
-          <p className="max-w-sm text-xs leading-relaxed text-neutral-400">
-            Satisfait ou retour gratuit de votre équipement.
-          </p>
-
-          <div
-            className="mt-2 flex w-full max-w-sm flex-col items-center gap-4"
-            style={{
-              paddingBottom: `max(0.75rem, env(safe-area-inset-bottom), ${keyboardPad}px)`,
-            }}
-          >
-            <a
-              href={offerEmailHref}
-              className={cn(
-                "group relative flex h-14 w-full items-center justify-center overflow-hidden rounded-full bg-[#0a0a0a] text-[15px] font-semibold tracking-wide text-white no-underline",
-                "shadow-[0_8px_30px_-8px_rgba(0,0,0,0.45)] transition hover:bg-[#151515]"
+            <div className="mx-auto mt-6 flex w-full max-w-md flex-col gap-2.5 lg:mx-0">
+              {isOfficialFeed && (
+                <p className="rounded-2xl border border-blue-100/90 bg-blue-50/60 px-4 py-3 text-xs leading-relaxed tracking-wide text-blue-950">
+                  Cote {retailerSource ?? "Data Lake"} ·{" "}
+                  {Math.max(1, sourcesFound ?? 1)} sources
+                </p>
               )}
-            >
-              <span
-                className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 transition duration-700 ease-out group-hover:translate-x-full group-hover:opacity-100"
-                aria-hidden
-              />
-              <span className="relative z-[1]">
-                Demander ce rachat à {offer} €
-              </span>
-            </a>
+              {pricingSource === "argus_predictif" && (
+                <p className="rounded-2xl border border-violet-100/90 bg-violet-50/60 px-4 py-3 text-xs tracking-wide text-violet-950">
+                  Estimation prédictive (marché live indisponible)
+                </p>
+              )}
+              {needsReview && (
+                <p className="rounded-2xl border border-amber-100/90 bg-amber-50/80 px-4 py-3 text-xs tracking-wide text-amber-950">
+                  Reprise à confirmer
+                  {typeof confidenceScore === "number"
+                    ? ` · ${Math.round(confidenceScore)} %`
+                    : ""}
+                </p>
+              )}
+              {typeof confidenceScore === "number" && confidenceScore < 70 && (
+                <p className="rounded-2xl border border-neutral-200/90 bg-neutral-50 px-4 py-3 text-xs tracking-wide text-neutral-700">
+                  Échantillon restreint — validation manuelle recommandée
+                </p>
+              )}
+            </div>
 
-            <a
-              href={offerEmailHref}
-              className="text-sm font-medium tracking-wide text-[#0a0a0a] underline decoration-neutral-400 underline-offset-4 transition hover:decoration-[#0a0a0a]"
-            >
-              Email
-            </a>
+            <p className="mx-auto mt-6 text-center text-xs leading-relaxed text-neutral-400 lg:mx-0 lg:text-left">
+              Satisfait ou retour gratuit de votre équipement.
+            </p>
 
-            <button
-              type="button"
-              onClick={reset}
-              className="text-xs tracking-wide text-neutral-400 transition hover:text-neutral-700"
-            >
-              Nouvelle estimation
-            </button>
+            <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-4 lg:mx-0">
+              <a
+                href={offerEmailHref}
+                className={cn(
+                  "group relative flex h-14 w-full items-center justify-center overflow-hidden rounded-full bg-[#0a0a0a] text-[15px] font-semibold tracking-wide text-white no-underline",
+                  "shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] transition hover:bg-[#151515]"
+                )}
+              >
+                <span
+                  className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent opacity-0 transition duration-700 ease-out group-hover:translate-x-full group-hover:opacity-100"
+                  aria-hidden
+                />
+                <span className="relative z-[1]">
+                  Demander ce rachat à {offer} €
+                </span>
+              </a>
+              <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start lg:gap-6">
+                <a
+                  href={offerEmailHref}
+                  className="text-sm font-medium text-[#0a0a0a] underline decoration-neutral-400 underline-offset-4 transition hover:decoration-[#0a0a0a]"
+                >
+                  Ouvrir l’e-mail
+                </a>
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="text-sm tracking-wide text-neutral-400 transition hover:text-neutral-700"
+                >
+                  Nouvelle estimation
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* Carte rappel produit */}
+          <aside className="lg:col-span-5">
+            <div
+              className={cn(
+                "relative overflow-hidden rounded-[1.65rem] border border-neutral-200/80",
+                "bg-gradient-to-b from-white via-neutral-50/40 to-white",
+                "shadow-[0_28px_64px_-28px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.04]",
+                "lg:sticky lg:top-6"
+              )}
+            >
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-neutral-300/60 to-transparent" />
+              <div className="p-6 sm:p-7">
+                <div className="flex items-center gap-2 text-neutral-500">
+                  <Package
+                    className="size-4 shrink-0 opacity-70"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                  <span className="text-[11px] font-medium uppercase tracking-[0.16em]">
+                    Votre article
+                  </span>
+                </div>
+
+                <div className="relative mx-auto mt-5 aspect-[4/3] w-full max-w-[280px] overflow-hidden rounded-2xl bg-neutral-100 sm:max-w-none">
+                  {recapImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={recapImageUrl}
+                      alt=""
+                      className="size-full object-contain mix-blend-multiply"
+                    />
+                  ) : (
+                    <div className="flex size-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-neutral-100 via-neutral-50 to-neutral-200/60">
+                      <EquipIcon
+                        className="size-16 text-neutral-300"
+                        strokeWidth={1}
+                        aria-hidden
+                      />
+                      <span className="px-4 text-center text-xs font-medium text-neutral-400">
+                        Visuel indicatif
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 space-y-1 text-center sm:mt-7">
+                  <p className="inline-flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/90 bg-white/80 px-3 py-1 text-[11px] font-medium text-neutral-600">
+                    <EquipIcon className="size-3.5" strokeWidth={1.75} />
+                    {equipmentLabel}
+                  </p>
+                  <h3 className="mt-3 text-xl font-semibold leading-tight tracking-tight text-[#0a0a0a] sm:text-2xl">
+                    {match.brand}
+                  </h3>
+                  <p className="text-base font-medium text-neutral-600 sm:text-lg">
+                    {match.model}
+                  </p>
+                  {declinaison.trim() ? (
+                    <p className="text-sm text-neutral-500">
+                      {declinaison.trim()}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="mt-6 space-y-0 border-t border-neutral-200/80 pt-5">
+                  {[
+                    ["État déclaré", conditionLabel],
+                    ["Colis", completenessLabel],
+                    equipmentSize.trim()
+                      ? ["Taille / pointure", equipmentSize.trim()]
+                      : null,
+                    helmetAgeLabel
+                      ? ["Âge du casque", helmetAgeLabel]
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .map((row, i) => {
+                      const [k, v] = row as [string, string];
+                      return (
+                        <div
+                          key={`${k}-${i}`}
+                          className="flex justify-between gap-4 border-b border-neutral-100/90 py-2.5 text-sm last:border-b-0"
+                        >
+                          <span className="shrink-0 text-neutral-400">{k}</span>
+                          <span className="text-right font-medium text-neutral-800">
+                            {v}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                <div className="mt-5 rounded-xl bg-neutral-900/[0.03] px-4 py-3 text-center">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+                    Référence prix neuf
+                  </p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-[#0a0a0a]">
+                    {retailFmt}
+                  </p>
+                </div>
+
+                {typeof estimatedResaleEur === "number" &&
+                estimatedResaleEur > 0 ? (
+                  <div className="mt-3 rounded-xl border border-emerald-100/90 bg-emerald-50/55 px-4 py-3 text-center">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-800/65">
+                      Revente occasion (indicatif)
+                    </p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-950">
+                      ~{estimatedResaleEur} €
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </aside>
         </div>
       </motion.div>
     );
