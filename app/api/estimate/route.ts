@@ -116,10 +116,14 @@ export async function POST(request: Request) {
     const parsed = estimateRequestSchema.safeParse(json);
     if (!parsed.success) {
       const flat = parsed.error.flatten();
+      const message =
+        flat.formErrors[0] ??
+        Object.values(flat.fieldErrors).flat()[0] ??
+        "Données invalides.";
       return NextResponse.json(
         {
           success: false,
-          message: "Données invalides.",
+          message,
           fieldErrors: flat.fieldErrors,
           formErrors: flat.formErrors,
         },

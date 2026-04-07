@@ -971,8 +971,10 @@ export function EstimationForm() {
         };
     const validated = estimateRequestSchema.safeParse(payload);
     if (!validated.success) {
+      const flat = validated.error.flatten();
       const first =
-        Object.values(validated.error.flatten().fieldErrors)[0]?.[0] ??
+        flat.formErrors[0] ??
+        Object.values(flat.fieldErrors).flat()[0] ??
         "Données invalides.";
       setSubmitError(first);
       return;
@@ -999,7 +1001,7 @@ export function EstimationForm() {
           "Content-Type": "application/json",
           Accept: "application/x-ndjson",
         },
-        body: JSON.stringify(validated.data),
+        body: JSON.stringify(payload),
       });
 
       const ct = res.headers.get("content-type") ?? "";
