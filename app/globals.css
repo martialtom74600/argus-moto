@@ -47,8 +47,7 @@
 }
 
 /*
- * Re-Ride — occasion certifiée : confiance, lisibilité, ton « centre d’inspection ».
- * Bleu confiance #2563EB pour validation et CTA.
+ * Re-Ride — thème unique : slate + emerald (pas de bleu produit).
  */
 :root {
   --background: #f8fafc;
@@ -57,19 +56,19 @@
   --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
-  --primary: #2563eb;
+  --primary: #059669;
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
   --secondary-foreground: #0f172a;
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
-  --accent: #eff6ff;
-  --accent-foreground: #1e3a8a;
+  --accent: #ecfdf5;
+  --accent-foreground: #065f46;
   --destructive: oklch(0.55 0.22 25);
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: rgba(37, 99, 235, 0.35);
-  --chart-1: oklch(0.55 0.2 250);
+  --ring: rgba(5, 150, 105, 0.35);
+  --chart-1: oklch(0.55 0.15 160);
   --chart-2: oklch(0.6 0 0);
   --chart-3: oklch(0.5 0 0);
   --chart-4: oklch(0.4 0 0);
@@ -77,12 +76,12 @@
   --radius: 0.5rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #0f172a;
-  --sidebar-primary: #2563eb;
+  --sidebar-primary: #059669;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f1f5f9;
   --sidebar-accent-foreground: #0f172a;
   --sidebar-border: #e2e8f0;
-  --sidebar-ring: rgba(37, 99, 235, 0.3);
+  --sidebar-ring: rgba(5, 150, 105, 0.3);
 }
 
 @layer base {

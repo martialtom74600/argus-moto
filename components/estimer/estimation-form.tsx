@@ -4,16 +4,19 @@ import * as React from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  HelmetIcon,
+  JacketIcon,
+  GloveIcon,
+  BootIcon,
+  PantIcon,
+} from "@/components/icons/category-icons";
+import {
   ArrowLeft,
   CaretDown,
   Check,
-  Footprints,
-  Hand,
-  HardHat,
+  CheckCircle,
   Package,
-  Pants,
   Shield,
-  TShirt,
 } from "@phosphor-icons/react";
 import { filterBrands } from "@/lib/data/moto-brands";
 import {
@@ -24,6 +27,21 @@ import {
 import type { CatalogModelRow } from "@/app/api/catalog/models/route";
 import { cn } from "@/lib/utils";
 import { LOGISTICS_FIXED_EUR } from "@/config/business";
+import {
+  uiBody,
+  uiBodySm,
+  uiBtnGhostBar,
+  uiBtnPrimaryBar,
+  uiCard,
+  uiCardLift,
+  uiHeadingCard,
+  uiHeadingSection,
+  uiHeadingSub,
+  uiInput,
+  uiLinkSubtle,
+  uiOverline,
+  uiPanelMuted,
+} from "@/lib/ui/site-ui";
 
 const TOTAL_STEPS = 6;
 const ANALYSIS_MIN_VISIBLE_MS = 2000;
@@ -131,6 +149,14 @@ type EquipmentId =
   | "gants"
   | "bottes"
   | "pantalon";
+
+const EQUIPMENT_LABELS: Record<EquipmentId, string> = {
+  casque: "Casque",
+  blouson: "Blouson",
+  pantalon: "Pantalon",
+  gants: "Gants",
+  bottes: "Bottes",
+};
 type ConditionId =
   | "neuf-etiquette"
   | "tres-bon"
@@ -155,12 +181,16 @@ type EstimateOfferResult = {
 type EstimateFallbackResult = { kind: "fallback"; message: string };
 type EstimateResult = EstimateOfferResult | EstimateFallbackResult;
 
-const equipmentOptions: { id: EquipmentId; icon: typeof HardHat }[] = [
-  { id: "casque", icon: HardHat },
-  { id: "blouson", icon: TShirt },
-  { id: "pantalon", icon: Pants },
-  { id: "gants", icon: Hand },
-  { id: "bottes", icon: Footprints },
+const equipmentOptions: {
+  id: EquipmentId;
+  icon: typeof HelmetIcon;
+  label: string;
+}[] = [
+  { id: "casque", icon: HelmetIcon, label: EQUIPMENT_LABELS.casque },
+  { id: "blouson", icon: JacketIcon, label: EQUIPMENT_LABELS.blouson },
+  { id: "pantalon", icon: PantIcon, label: EQUIPMENT_LABELS.pantalon },
+  { id: "gants", icon: GloveIcon, label: EQUIPMENT_LABELS.gants },
+  { id: "bottes", icon: BootIcon, label: EQUIPMENT_LABELS.bottes },
 ];
 
 const conditionOptions: {
@@ -244,61 +274,37 @@ function useVisualViewportInset() {
 
 const springTransition = {
   type: "spring" as const,
-  stiffness: 380,
-  damping: 28,
-  mass: 0.85,
+  stiffness: 320,
+  damping: 32,
+  mass: 0.9,
 };
 
 const stepVariants = {
   enter: (dir: number) => ({
-    x: dir >= 0 ? 56 : -56,
+    x: dir >= 0 ? 20 : -20,
     opacity: 0,
-    scale: 0.97,
   }),
-  center: { x: 0, opacity: 1, scale: 1 },
+  center: { x: 0, opacity: 1 },
   exit: (dir: number) => ({
-    x: dir >= 0 ? -40 : 40,
+    x: dir >= 0 ? -16 : 16,
     opacity: 0,
-    scale: 0.98,
   }),
 };
 
-/** Micro-pistes visuelles + libellé court (sans fil d’Ariane chargé). */
+/** Libellé d’étape discret (la progression visuelle est dans la barre du header). */
 function StepTrail({ activeStep }: { activeStep: number }) {
   const label = BREADCRUMB_LABELS[activeStep - 1];
+  if (!label) return null;
   return (
-    <div className="mb-2 flex flex-col items-center gap-2 sm:mb-3">
-      <div
-        className="flex items-center gap-1"
-        aria-label={`Étape ${activeStep} sur ${TOTAL_STEPS}`}
-      >
-        {BREADCRUMB_LABELS.map((_, i) => {
-          const n = i + 1;
-          const done = n < activeStep;
-          const here = n === activeStep;
-          return (
-            <React.Fragment key={i}>
-              {i > 0 && (
-                <span className="h-px w-2 shrink-0 bg-neutral-200 sm:w-3" />
-              )}
-              <span
-                className={cn(
-                  "size-1 rounded-full transition-colors sm:size-1.5",
-                  here && "scale-125 bg-[#0a0a0a]",
-                  done && !here && "bg-neutral-400",
-                  !done && !here && "bg-neutral-200"
-                )}
-              />
-            </React.Fragment>
-          );
-        })}
-      </div>
-      {label ? (
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-neutral-400">
-          {label}
-        </p>
-      ) : null}
-    </div>
+    <motion.p
+      key={activeStep}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      className={cn("mb-2 text-center sm:mb-3", uiOverline, "text-slate-400")}
+    >
+      {label}
+    </motion.p>
   );
 }
 
@@ -308,10 +314,8 @@ function StepGuidance({ step }: { step: number }) {
   return (
     <div className="mx-auto w-full max-w-2xl px-1 text-center">
       <StepTrail activeStep={step} />
-      <h2 className="text-3xl font-medium tracking-[-0.03em] text-[#0a0a0a] sm:text-4xl sm:tracking-[-0.035em]">
-        {copy.title}
-      </h2>
-      <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-neutral-500 sm:mt-4 sm:text-lg">
+      <h2 className={cn(uiHeadingSection)}>{copy.title}</h2>
+      <p className={cn("mx-auto mt-4 max-w-xl sm:mt-5 sm:text-lg", uiBody)}>
         {copy.subtitle}
       </p>
     </div>
@@ -324,7 +328,7 @@ function BrandsSkeleton() {
       {Array.from({ length: 5 }).map((_, i) => (
         <div
           key={i}
-          className="h-12 w-full animate-pulse rounded-2xl bg-neutral-100 sm:h-[3.25rem]"
+          className="h-12 w-full animate-pulse rounded-3xl bg-slate-100 sm:h-[3.25rem]"
         />
       ))}
     </div>
@@ -337,10 +341,10 @@ function ModelsSkeleton() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="flex flex-col gap-2 rounded-2xl border border-neutral-100 bg-neutral-50/80 p-3"
+          className={cn("flex flex-col gap-2 border border-slate-200/80 p-3", uiPanelMuted)}
         >
-          <div className="aspect-square w-full animate-pulse rounded-xl bg-neutral-200/80" />
-          <div className="mx-auto h-3 w-4/5 animate-pulse rounded bg-neutral-200/90" />
+          <div className="aspect-square w-full animate-pulse rounded-3xl bg-slate-200/80" />
+          <div className="mx-auto h-3 w-4/5 animate-pulse rounded-lg bg-slate-200/90" />
         </div>
       ))}
     </div>
@@ -372,7 +376,7 @@ function AnalysisLogLines({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="text-[13px] font-medium tracking-wide text-neutral-600"
+            className={cn("text-[13px] font-medium tracking-wide", uiBodySm)}
           >
             {line}
           </motion.p>
@@ -394,7 +398,7 @@ function PulsingAnalysisOrb({ exiting }: { exiting: boolean }) {
       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
     >
       <motion.div
-        className="absolute inset-0 rounded-full bg-gradient-to-br from-[#1d5efa]/20 via-violet-400/15 to-transparent"
+        className="absolute inset-0 rounded-full bg-gradient-to-br from-emerald-400/25 via-emerald-600/15 to-transparent"
         animate={{ scale: [1, 1.08, 1], opacity: [0.5, 0.85, 0.5] }}
         transition={{
           duration: 2.8,
@@ -403,7 +407,7 @@ function PulsingAnalysisOrb({ exiting }: { exiting: boolean }) {
         }}
       />
       <motion.div
-        className="absolute inset-2 rounded-full border border-neutral-200/80 bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md"
+        className="absolute inset-2 rounded-full border border-slate-200/80 bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md"
         animate={{ scale: [1, 1.03, 1] }}
         transition={{
           duration: 2.2,
@@ -412,8 +416,8 @@ function PulsingAnalysisOrb({ exiting }: { exiting: boolean }) {
         }}
       />
       <motion.div
-        className="relative size-16 rounded-full bg-gradient-to-br from-[#0a0a0a] to-[#2a2a2a] shadow-lg sm:size-[4.5rem]"
-        style={{ boxShadow: "0 12px 40px -8px rgba(0,0,0,0.35)" }}
+        className="relative size-16 rounded-full bg-gradient-to-br from-emerald-700 to-emerald-900 shadow-md sm:size-[4.5rem]"
+        style={{ boxShadow: "0 12px 40px -8px rgba(5,150,105,0.4)" }}
       />
     </motion.div>
   );
@@ -422,13 +426,13 @@ function PulsingAnalysisOrb({ exiting }: { exiting: boolean }) {
 function TechnicalJournalDisclosure({ lines }: { lines: string[] }) {
   return (
     <details className="group mt-8 text-center">
-      <summary className="cursor-pointer list-none text-[11px] font-medium tracking-[0.14em] text-neutral-400 transition hover:text-neutral-600 [&::-webkit-details-marker]:hidden">
-        <span className="inline-flex items-center gap-1 border-b border-neutral-300/80 pb-0.5">
+      <summary className="cursor-pointer list-none text-[11px] font-semibold tracking-[0.14em] text-slate-500 transition hover:text-slate-700 [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-1 border-b border-slate-300/80 pb-0.5">
           Voir le journal technique
           <CaretDown className="size-3 transition group-open:rotate-180" />
         </span>
       </summary>
-      <pre className="mx-auto mt-3 max-h-[30vh] max-w-lg overflow-hidden text-left font-mono text-[10px] leading-relaxed tracking-tight text-neutral-500">
+      <pre className="mx-auto mt-3 max-h-[30vh] max-w-lg overflow-hidden text-left font-mono text-[10px] leading-relaxed tracking-tight text-slate-500">
         {lines.length ? lines.join("\n") : "—"}
       </pre>
     </details>
@@ -1145,14 +1149,7 @@ export function EstimationForm() {
     setCompleteness("complete");
   };
 
-  const equipmentLabels: Record<EquipmentId, string> = {
-    casque: "Casque",
-    blouson: "Blouson",
-    pantalon: "Pantalon",
-    gants: "Gants",
-    bottes: "Bottes",
-  };
-  const equipmentLabel = equipment ? equipmentLabels[equipment] : "";
+  const equipmentLabel = equipment ? EQUIPMENT_LABELS[equipment] : "";
   const conditionLabel =
     conditionOptions.find((o) => o.id === condition)?.label ?? "";
 
@@ -1197,8 +1194,8 @@ export function EstimationForm() {
           ?.image_url ?? null)
       : null;
     const EquipIcon = equipment
-      ? (equipmentOptions.find((e) => e.id === equipment)?.icon ?? HardHat)
-      : HardHat;
+      ? (equipmentOptions.find((e) => e.id === equipment)?.icon ?? HelmetIcon)
+      : HelmetIcon;
     const completenessLabel =
       COMPLETENESS_OPTIONS.find((o) => o.id === completeness)?.label ?? "";
     const helmetAgeLabel =
@@ -1227,19 +1224,15 @@ export function EstimationForm() {
           {/* Colonne estimation */}
           <div className="flex flex-col lg:col-span-7">
             <div className="flex flex-col gap-4 text-center lg:max-w-xl lg:text-left">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-neutral-400">
-                Estimation terminée
-              </p>
-              <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[#0a0a0a] sm:text-4xl">
-                Prix de rachat proposé
-              </h2>
-              <p className="text-base leading-relaxed text-neutral-600 sm:text-[17px]">
+              <p className={cn(uiOverline, "text-slate-500")}>Estimation terminée</p>
+              <h2 className={cn(uiHeadingSection)}>Prix de rachat proposé</h2>
+              <p className={cn(uiBody, "sm:text-[17px]")}>
                 Montant que nous vous versons pour cet article, dans l’état
                 indiqué. Il inclut nos frais de contrôle et de logistique, ainsi
                 que la marge nécessaire pour une revente sereine — un équilibre
                 juste pour vous comme pour nous.
               </p>
-              <p className="text-sm leading-snug text-neutral-500">
+              <p className={cn(uiBodySm, "leading-snug")}>
                 Indicatif, valable 7 jours. Paiement sous 48 h après réception et
                 vérification.
               </p>
@@ -1250,7 +1243,7 @@ export function EstimationForm() {
                 <span
                   className={cn(
                     "rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em]",
-                    "border border-[#1d5efa]/25 bg-gradient-to-r from-[#1d5efa]/8 to-amber-500/15 text-[#1746cf]"
+                    "border border-emerald-200/90 bg-gradient-to-r from-emerald-50 to-amber-50/80 text-emerald-900 shadow-sm"
                   )}
                 >
                   Certifié Argus
@@ -1260,16 +1253,16 @@ export function EstimationForm() {
 
             <div className="mt-6 flex flex-col items-center lg:items-start">
               <p
-                className="text-7xl font-semibold tracking-[-0.04em] text-[#0a0a0a] tabular-nums sm:text-8xl lg:text-[7.5rem] lg:leading-[0.95]"
+                className="text-7xl font-bold tracking-tight text-slate-900 tabular-nums sm:text-8xl lg:text-[7.5rem] lg:leading-[0.95]"
                 aria-label={`Montant que nous vous versons : ${offer} euros`}
               >
                 {offer}
-                <span className="text-3xl font-medium text-neutral-300 sm:text-4xl lg:text-5xl">
+                <span className="text-3xl font-semibold text-slate-300 sm:text-4xl lg:text-5xl">
                   {" "}
                   €
                 </span>
               </p>
-              <p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-neutral-400">
+              <p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
                 versés à vous · tout compris
               </p>
             </div>
@@ -1277,10 +1270,11 @@ export function EstimationForm() {
             {typeof estimatedResaleEur === "number" && estimatedResaleEur > 0 ? (
               <div
                 className={cn(
-                  "mx-auto mt-8 w-full max-w-md rounded-2xl border border-emerald-200/70",
-                  "bg-gradient-to-br from-emerald-50/95 via-white to-teal-50/30",
-                  "px-5 py-5 text-center shadow-[0_12px_36px_-20px_rgba(5,150,105,0.35)]",
-                  "lg:mx-0 lg:text-left"
+                  uiCard,
+                  uiCardLift,
+                  "mx-auto mt-8 w-full max-w-md border-emerald-200/80",
+                  "bg-gradient-to-br from-emerald-50/95 via-white to-emerald-50/40",
+                  "px-5 py-5 text-center lg:mx-0 lg:text-left"
                 )}
               >
                 <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-800/75">
@@ -1305,27 +1299,37 @@ export function EstimationForm() {
               </div>
             ) : null}
 
-            <p className="mx-auto mt-6 max-w-md text-center text-sm leading-relaxed text-neutral-500 lg:mx-0 lg:text-left">
+            <p className="mx-auto mt-6 max-w-md text-center text-sm leading-relaxed text-slate-500 lg:mx-0 lg:text-left">
               Basé sur une référence neuf à{" "}
-              <span className="font-medium text-neutral-700">{retailFmt}</span>.
+              <span className="font-medium text-slate-700">{retailFmt}</span>.
               Nos frais (dont env. {LOGISTICS_FIXED_EUR} € logistique et
               traitement) sont déjà déduits de ce montant.
             </p>
 
             <div className="mx-auto mt-6 flex w-full max-w-md flex-col gap-2.5 lg:mx-0">
               {isOfficialFeed && (
-                <p className="rounded-2xl border border-blue-100/90 bg-blue-50/60 px-4 py-3 text-xs leading-relaxed tracking-wide text-blue-950">
+                <p
+                  className={cn(
+                    uiCard,
+                    "border-slate-200 bg-slate-50/90 px-4 py-3 text-xs leading-relaxed tracking-wide text-slate-800"
+                  )}
+                >
                   Cote {retailerSource ?? "Data Lake"} ·{" "}
                   {Math.max(1, sourcesFound ?? 1)} sources
                 </p>
               )}
               {pricingSource === "argus_predictif" && (
-                <p className="rounded-2xl border border-violet-100/90 bg-violet-50/60 px-4 py-3 text-xs tracking-wide text-violet-950">
+                <p
+                  className={cn(
+                    uiCard,
+                    "border-slate-200 bg-slate-50/90 px-4 py-3 text-xs tracking-wide text-slate-800"
+                  )}
+                >
                   Estimation prédictive (marché live indisponible)
                 </p>
               )}
               {needsReview && (
-                <p className="rounded-2xl border border-amber-100/90 bg-amber-50/80 px-4 py-3 text-xs tracking-wide text-amber-950">
+                <p className="rounded-3xl border border-amber-200/90 bg-amber-50/90 px-4 py-3 text-xs tracking-wide text-amber-950 shadow-sm">
                   Reprise à confirmer
                   {typeof confidenceScore === "number"
                     ? ` · ${Math.round(confidenceScore)} %`
@@ -1333,13 +1337,13 @@ export function EstimationForm() {
                 </p>
               )}
               {typeof confidenceScore === "number" && confidenceScore < 70 && (
-                <p className="rounded-2xl border border-neutral-200/90 bg-neutral-50 px-4 py-3 text-xs tracking-wide text-neutral-700">
+                <p className={cn(uiCard, "bg-slate-50 px-4 py-3 text-xs tracking-wide text-slate-700")}>
                   Échantillon restreint — validation manuelle recommandée
                 </p>
               )}
             </div>
 
-            <p className="mx-auto mt-6 text-center text-xs leading-relaxed text-neutral-400 lg:mx-0 lg:text-left">
+            <p className="mx-auto mt-6 text-center text-xs leading-relaxed text-slate-400 lg:mx-0 lg:text-left">
               Satisfait ou retour gratuit de votre équipement.
             </p>
 
@@ -1347,8 +1351,8 @@ export function EstimationForm() {
               <a
                 href={offerEmailHref}
                 className={cn(
-                  "group relative flex h-14 w-full items-center justify-center overflow-hidden rounded-full bg-[#0a0a0a] text-[15px] font-semibold tracking-wide text-white no-underline",
-                  "shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] transition hover:bg-[#151515]"
+                  uiBtnPrimaryBar,
+                  "relative group w-full overflow-hidden py-0 text-[15px] tracking-wide no-underline hover:text-white"
                 )}
               >
                 <span
@@ -1362,14 +1366,14 @@ export function EstimationForm() {
               <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start lg:gap-6">
                 <a
                   href={offerEmailHref}
-                  className="text-sm font-medium text-[#0a0a0a] underline decoration-neutral-400 underline-offset-4 transition hover:decoration-[#0a0a0a]"
+                  className="text-sm font-medium text-slate-900 underline decoration-slate-400 underline-offset-4 transition hover:decoration-slate-900"
                 >
                   Ouvrir l’e-mail
                 </a>
                 <button
                   type="button"
                   onClick={reset}
-                  className="text-sm tracking-wide text-neutral-400 transition hover:text-neutral-700"
+                  className="text-sm font-semibold tracking-wide text-slate-500 underline decoration-slate-300/80 underline-offset-4 transition hover:text-emerald-800 hover:decoration-emerald-400/80"
                 >
                   Nouvelle estimation
                 </button>
@@ -1381,26 +1385,24 @@ export function EstimationForm() {
           <aside className="lg:col-span-5">
             <div
               className={cn(
-                "relative overflow-hidden rounded-[1.65rem] border border-neutral-200/80",
-                "bg-gradient-to-b from-white via-neutral-50/40 to-white",
-                "shadow-[0_28px_64px_-28px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.04]",
+                uiCard,
+                uiCardLift,
+                "relative overflow-hidden bg-gradient-to-b from-white via-slate-50/40 to-white",
                 "lg:sticky lg:top-6"
               )}
             >
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-neutral-300/60 to-transparent" />
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-300/60 to-transparent" />
               <div className="p-6 sm:p-7">
-                <div className="flex items-center gap-2 text-neutral-500">
+                <div className="flex items-center gap-2 text-slate-500">
                   <Package
                     className="size-4 shrink-0 opacity-70"
                     weight="regular"
                     aria-hidden
                   />
-                  <span className="text-[11px] font-medium uppercase tracking-[0.16em]">
-                    Votre article
-                  </span>
+                  <span className={cn(uiOverline, "text-slate-500")}>Votre article</span>
                 </div>
 
-                <div className="relative mx-auto mt-5 aspect-[4/3] w-full max-w-[280px] overflow-hidden rounded-2xl bg-neutral-100 sm:max-w-none">
+                <div className="relative mx-auto mt-5 aspect-[4/3] w-full max-w-[280px] overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-100 sm:max-w-none">
                   {recapImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -1409,13 +1411,12 @@ export function EstimationForm() {
                       className="size-full object-contain mix-blend-multiply"
                     />
                   ) : (
-                    <div className="flex size-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-neutral-100 via-neutral-50 to-neutral-200/60">
+                    <div className="flex size-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200/60">
                       <EquipIcon
-                        className="size-16 text-neutral-300"
-                        weight="light"
+                        className="size-16 text-slate-400"
                         aria-hidden
                       />
-                      <span className="px-4 text-center text-xs font-medium text-neutral-400">
+                      <span className="px-4 text-center text-xs font-medium text-slate-400">
                         Visuel indicatif
                       </span>
                     </div>
@@ -1423,24 +1424,24 @@ export function EstimationForm() {
                 </div>
 
                 <div className="mt-6 space-y-1 text-center sm:mt-7">
-                  <p className="inline-flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/90 bg-white/80 px-3 py-1 text-[11px] font-medium text-neutral-600">
-                    <EquipIcon className="size-3.5" weight="regular" />
+                  <p className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200/90 bg-white/80 px-3 py-1 text-[11px] font-medium text-slate-600">
+                    <EquipIcon className="size-3.5" />
                     {equipmentLabel}
                   </p>
-                  <h3 className="mt-3 text-xl font-semibold leading-tight tracking-tight text-[#0a0a0a] sm:text-2xl">
+                  <h3 className={cn("mt-3 leading-tight", uiHeadingSub)}>
                     {match.brand}
                   </h3>
-                  <p className="text-base font-medium text-neutral-600 sm:text-lg">
+                  <p className="text-base font-medium text-slate-600 sm:text-lg">
                     {match.model}
                   </p>
                   {declinaison.trim() ? (
-                    <p className="text-sm text-neutral-500">
+                    <p className="text-sm text-slate-500">
                       {declinaison.trim()}
                     </p>
                   ) : null}
                 </div>
 
-                <div className="mt-6 space-y-0 border-t border-neutral-200/80 pt-5">
+                <div className="mt-6 space-y-0 border-t border-slate-200/80 pt-5">
                   {[
                     ["État déclaré", conditionLabel],
                     ["Colis", completenessLabel],
@@ -1457,10 +1458,10 @@ export function EstimationForm() {
                       return (
                         <div
                           key={`${k}-${i}`}
-                          className="flex justify-between gap-4 border-b border-neutral-100/90 py-2.5 text-sm last:border-b-0"
+                          className="flex justify-between gap-4 border-b border-slate-100/90 py-2.5 text-sm last:border-b-0"
                         >
-                          <span className="shrink-0 text-neutral-400">{k}</span>
-                          <span className="text-right font-medium text-neutral-800">
+                          <span className="shrink-0 text-slate-400">{k}</span>
+                          <span className="text-right font-medium text-slate-800">
                             {v}
                           </span>
                         </div>
@@ -1468,18 +1469,18 @@ export function EstimationForm() {
                     })}
                 </div>
 
-                <div className="mt-5 rounded-xl bg-neutral-900/[0.03] px-4 py-3 text-center">
-                  <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+                <div className="mt-5 rounded-3xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-center shadow-sm">
+                  <p className={cn("text-[10px] tracking-[0.12em]", uiOverline, "text-slate-500")}>
                     Référence prix neuf
                   </p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums text-[#0a0a0a]">
+                  <p className="mt-1 text-lg font-bold tabular-nums tracking-tight text-slate-900">
                     {retailFmt}
                   </p>
                 </div>
 
                 {typeof estimatedResaleEur === "number" &&
                 estimatedResaleEur > 0 ? (
-                  <div className="mt-3 rounded-xl border border-emerald-100/90 bg-emerald-50/55 px-4 py-3 text-center">
+                  <div className="mt-3 rounded-3xl border border-emerald-200/90 bg-emerald-50/60 px-4 py-3 text-center shadow-sm">
                     <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-800/65">
                       Revente occasion (indicatif)
                     </p>
@@ -1507,10 +1508,8 @@ export function EstimationForm() {
         transition={springTransition}
         className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-6 pb-8 text-center"
       >
-        <h2 className="text-lg font-semibold tracking-tight text-[#0a0a0a]">
-          Hors automate
-        </h2>
-        <p className="mt-3 max-w-md text-sm leading-relaxed text-neutral-500">
+        <h2 className={cn(uiHeadingCard)}>Hors automate</h2>
+        <p className={cn("mt-3 max-w-md", uiBodySm)}>
           {estimateResult.message}
         </p>
         <div
@@ -1521,7 +1520,10 @@ export function EstimationForm() {
         >
           <a
             href={expertiseHref}
-            className="inline-flex h-12 items-center justify-center rounded-full bg-[#0a0a0a] text-sm font-semibold text-white"
+            className={cn(
+              uiBtnPrimaryBar,
+              "w-full text-sm no-underline hover:text-white"
+            )}
           >
             Expertise manuelle
           </a>
@@ -1532,7 +1534,7 @@ export function EstimationForm() {
               setFlowPhase("form");
               setStep(1);
             }}
-            className="text-sm text-neutral-500 underline underline-offset-4"
+            className={uiLinkSubtle}
           >
             Modifier
           </button>
@@ -1562,39 +1564,57 @@ export function EstimationForm() {
       >
         <Link
           href="/"
-          className="text-[17px] font-semibold tracking-tight text-[#0a0a0a] transition hover:text-neutral-600"
+          className="text-[17px] font-semibold tracking-tight text-slate-900 transition hover:text-emerald-800"
         >
           Re-Ride
         </Link>
         {flowPhase === "form" && (
-          <span className="tabular-nums text-xs font-medium tracking-wide text-neutral-400 sm:text-sm">
-            {step}/{TOTAL_STEPS}
+          <span className="text-[11px] font-semibold tracking-tight text-slate-400 sm:text-xs">
+            Estimation
           </span>
         )}
         {flowPhase === "result" && (
-          <span className="text-[11px] font-medium tracking-wide text-neutral-400">
+          <span className="text-[11px] font-medium tracking-wide text-slate-400">
             Résultat
           </span>
         )}
         {flowPhase === "analyzing" && (
-          <span className="text-[11px] font-medium tracking-wide text-neutral-400">
+          <span className="text-[11px] font-medium tracking-wide text-slate-400">
             Analyse
           </span>
         )}
       </header>
 
-      <div className="h-[2px] w-full shrink-0 overflow-hidden bg-neutral-100">
-        <motion.div
-          className="h-full bg-[#0a0a0a]"
-          initial={false}
-          animate={{ width: `${Math.min(100, Math.max(0, progressFraction * 100))}%` }}
-          transition={{
-            type: "spring",
-            stiffness: 120,
-            damping: 24,
-            mass: 0.65,
-          }}
-        />
+      <div className="px-5 pb-2 pt-0.5 sm:px-8 sm:pb-2.5">
+        <div
+          className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-200/65 shadow-inner ring-1 ring-slate-900/[0.04]"
+          role="progressbar"
+          aria-valuenow={Math.round(progressFraction * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={
+            flowPhase === "form"
+              ? `Progression : étape ${step} sur ${TOTAL_STEPS}`
+              : flowPhase === "analyzing"
+                ? "Analyse en cours"
+                : "Terminé"
+          }
+        >
+          <motion.div
+            layoutId="estimation-form-progress-fill"
+            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 shadow-sm"
+            initial={false}
+            animate={{
+              width: `${Math.min(100, Math.max(0, progressFraction * 100))}%`,
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 100,
+              damping: 26,
+              mass: 0.72,
+            }}
+          />
+        </div>
       </div>
 
       <main className="relative min-h-0 flex-1 overflow-hidden">
@@ -1623,8 +1643,8 @@ export function EstimationForm() {
                     Grille auto + minmax(0,1fr) : la zone scroll a une hauteur max réelle
                     (sinon flex-1 se dilate avec le contenu et overflow-y-auto ne scroll pas sur desktop).
                   */}
-                  <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden py-4 sm:py-6">
-                    <div className="mx-auto grid h-full min-h-0 w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] gap-6 sm:max-w-3xl sm:gap-7">
+                  <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden py-5 sm:py-8">
+                    <div className="mx-auto grid h-full min-h-0 w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] gap-8 sm:max-w-3xl sm:gap-10">
                       <div className="w-full shrink-0">
                         <StepGuidance step={step} />
                       </div>
@@ -1635,39 +1655,72 @@ export function EstimationForm() {
                         )}
                       >
                   {step === 1 && (
-                    <div className="flex w-full flex-col items-center">
-                      <div className="grid w-full grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5 sm:gap-5">
-                        {equipmentOptions.map(({ id, icon: Icon }) => {
+                    <motion.div
+                      className="flex w-full flex-col items-center"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.35, delay: 0.05 }}
+                    >
+                      <div className="grid w-full grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-5 sm:gap-6">
+                        {equipmentOptions.map(({ id, icon: Icon, label: equipLabel }) => {
                           const picking = equipSelecting === id;
                           return (
                             <motion.button
                               key={id}
                               type="button"
-                              whileTap={{ scale: 0.96 }}
+                              aria-label={equipLabel}
+                              aria-pressed={picking}
+                              whileTap={{ scale: 0.97 }}
                               onClick={() => selectEquipment(id)}
                               className={cn(
-                                "relative aspect-square rounded-3xl border-2 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors duration-200",
-                                picking
-                                  ? "border-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]"
-                                  : "border-neutral-200/80 hover:border-neutral-300"
+                                "group relative flex min-h-[10rem] flex-col items-center justify-center gap-4 border px-2 py-5 backdrop-blur-xl sm:min-h-[11rem] sm:gap-4 sm:py-6",
+                                uiCard,
+                                uiCardLift,
+                                "min-h-[10rem] bg-white/85",
+                                picking &&
+                                  "border-emerald-500 bg-emerald-50/60 shadow-md ring-1 ring-emerald-500/25"
                               )}
                             >
                               {picking && (
-                                <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
-                                  <Check className="size-4" weight="bold" />
-                                </span>
+                                <motion.span
+                                  initial={{ opacity: 0, scale: 0.85 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  className="absolute right-2.5 top-2.5 sm:right-3 sm:top-3"
+                                  aria-hidden
+                                >
+                                  <CheckCircle
+                                    className="size-6 text-emerald-600 drop-shadow-sm sm:size-7"
+                                    weight="fill"
+                                  />
+                                </motion.span>
                               )}
-                              <span className="flex h-full w-full items-center justify-center text-neutral-400">
+                              <span className="flex size-14 shrink-0 items-center justify-center sm:size-16">
                                 <Icon
-                                  className="size-11 sm:size-[3.25rem]"
-                                  weight="light"
+                                  className={cn(
+                                    "size-12 shrink-0 transition-colors duration-300",
+                                    id === "pantalon" && "w-14 sm:w-[3.75rem]",
+                                    picking
+                                      ? "text-emerald-700"
+                                      : "text-slate-600 group-hover:text-slate-800"
+                                  )}
+                                  aria-hidden
                                 />
+                              </span>
+                              <span
+                                className={cn(
+                                  "text-center text-[13px] font-semibold leading-snug tracking-tight sm:text-sm",
+                                  picking
+                                    ? "text-emerald-900"
+                                    : "text-slate-600 group-hover:text-slate-800"
+                                )}
+                              >
+                                {equipLabel}
                               </span>
                             </motion.button>
                           );
                         })}
                       </div>
-                    </div>
+                    </motion.div>
                   )}
 
                   {step === 2 && (
@@ -1698,10 +1751,10 @@ export function EstimationForm() {
                             aria-expanded={brandOpen}
                             aria-controls="brand-command-list"
                             className={cn(
-                              "h-[3.75rem] w-full rounded-3xl border border-neutral-200/95 bg-white px-6 sm:h-20 sm:px-8",
-                              "text-xl font-medium tracking-tight text-[#0a0a0a] shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08)] outline-none sm:text-2xl",
-                              "placeholder:text-neutral-400 placeholder:font-normal",
-                              "transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/8",
+                              uiInput,
+                              "h-[3.75rem] w-full px-6 sm:h-20 sm:px-8",
+                              "text-xl font-medium tracking-tight sm:text-2xl",
+                              "placeholder:font-normal",
                               stepHint &&
                                 !canGoNext &&
                                 step === 2 &&
@@ -1714,7 +1767,7 @@ export function EstimationForm() {
                               <ul
                                 id="brand-command-list"
                                 role="listbox"
-                                className="absolute left-0 right-0 top-full z-10 mt-2 max-h-[min(50vh,22rem)] overflow-auto rounded-2xl border border-neutral-200/90 bg-white py-1 shadow-lg"
+                                className="absolute left-0 right-0 top-full z-10 mt-2 max-h-[min(50vh,22rem)] overflow-auto rounded-3xl border border-slate-200 bg-white py-1 shadow-sm"
                               >
                                 {brandChoices.map((b) => (
                                   <li
@@ -1727,7 +1780,7 @@ export function EstimationForm() {
                                   >
                                     <button
                                       type="button"
-                                      className="w-full px-6 py-3.5 text-left text-base font-medium tracking-tight text-neutral-800 hover:bg-neutral-50"
+                                      className="w-full px-6 py-3.5 text-left text-base font-medium tracking-tight text-slate-800 hover:bg-slate-50"
                                       onClick={() => {
                                         setBrand(b);
                                         setBrandOpen(false);
@@ -1746,19 +1799,19 @@ export function EstimationForm() {
                   )}
 
                   {step === 3 && (
-                    <div className="flex w-full min-h-0 flex-col items-center gap-6 touch-pan-y">
+                    <div className="flex w-full min-h-0 flex-col items-center gap-8 touch-pan-y sm:gap-10">
                       {!manualEntry ? (
                         <>
                           {modelsLoading ? (
                             <ModelsSkeleton />
                           ) : catalogModels.length === 0 ? (
-                            <p className="max-w-md text-center text-sm leading-relaxed text-neutral-500">
+                            <p className="max-w-md text-center text-sm leading-relaxed text-slate-500">
                               Aucun modèle indexé pour cette marque. Nous
                               complétons le catalogue régulièrement — en attendant,
                               utilisez la saisie manuelle.
                             </p>
                           ) : (
-                            <div className="grid w-full max-w-3xl grid-cols-2 gap-3 touch-pan-y sm:grid-cols-3 sm:gap-4">
+                            <div className="grid w-full max-w-3xl grid-cols-2 gap-4 touch-pan-y sm:grid-cols-3 sm:gap-5">
                               {catalogModels.map((row) => {
                                 const picked =
                                   catalogModelSelecting === row.canonical_slug;
@@ -1769,13 +1822,15 @@ export function EstimationForm() {
                                     whileTap={{ scale: 0.98 }}
                                     onClick={() => selectCatalogModel(row)}
                                     className={cn(
-                                      "touch-pan-y flex flex-col gap-2 rounded-2xl border-2 bg-white p-3 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors",
+                                      uiCard,
+                                      uiCardLift,
+                                      "touch-pan-y flex flex-col gap-2 border-2 p-3 text-left transition-colors",
                                       picked
-                                        ? "border-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]"
-                                        : "border-neutral-200/80 hover:border-neutral-300"
+                                        ? "border-emerald-500 shadow-md ring-1 ring-emerald-500/25"
+                                        : "border-slate-200 hover:border-slate-300"
                                     )}
                                   >
-                                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-neutral-50">
+                                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-50">
                                       {row.image_url ? (
                                         // eslint-disable-next-line @next/next/no-img-element
                                         <img
@@ -1784,7 +1839,7 @@ export function EstimationForm() {
                                           className="size-full object-contain"
                                         />
                                       ) : (
-                                        <div className="flex size-full items-center justify-center text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                                        <div className="flex size-full items-center justify-center text-[10px] font-medium uppercase tracking-wider text-slate-400">
                                           Photo
                                         </div>
                                       )}
@@ -1794,7 +1849,7 @@ export function EstimationForm() {
                                         </span>
                                       )}
                                     </div>
-                                    <span className="line-clamp-2 text-center text-[13px] font-medium leading-snug tracking-tight text-neutral-800 sm:text-sm">
+                                    <span className="line-clamp-2 text-center text-[13px] font-medium leading-snug tracking-tight text-slate-800 sm:text-sm">
                                       {row.model}
                                     </span>
                                   </motion.button>
@@ -1805,14 +1860,14 @@ export function EstimationForm() {
                           <button
                             type="button"
                             onClick={startManualModelEntry}
-                            className="text-sm font-medium tracking-wide text-neutral-500 underline decoration-neutral-300 underline-offset-4 transition hover:text-[#0a0a0a] hover:decoration-[#0a0a0a]"
+                            className="text-sm font-medium tracking-wide text-slate-500 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-900 hover:decoration-slate-900"
                           >
                             Saisie manuelle (marque + modèle)
                           </button>
                         </>
                       ) : (
                         <div className="flex w-full flex-col items-center">
-                          <p className="mb-4 max-w-md text-center text-sm text-neutral-500">
+                          <p className="mb-4 max-w-md text-center text-sm text-slate-500">
                             Décrivez la référence : nos experts alignent sur le
                             catalogue lorsque c’est possible.
                           </p>
@@ -1829,22 +1884,22 @@ export function EstimationForm() {
                               placeholder="Marque et modèle · ex. Shoei NXR2"
                               autoComplete="off"
                               className={cn(
-                                "h-[3.75rem] w-full rounded-3xl border border-neutral-200/95 bg-white px-6 sm:h-20 sm:px-8",
-                                "text-xl font-medium tracking-tight text-[#0a0a0a] shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08)] outline-none sm:text-2xl",
-                                "placeholder:text-neutral-400 placeholder:font-normal",
-                                "transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/8",
+                                uiInput,
+                                "h-[3.75rem] w-full px-6 sm:h-20 sm:px-8",
+                                "text-xl font-medium tracking-tight sm:text-2xl",
+                                "placeholder:font-normal",
                                 stepHint &&
                                   (!brand.trim() || !model.trim()) &&
                                   "ring-2 ring-amber-200/80"
                               )}
                             />
                             {brandOpen && brandSuggestions.length > 0 && (
-                              <ul className="absolute left-0 right-0 top-full z-10 mt-2 max-h-[min(50vh,22rem)] overflow-y-auto rounded-2xl border border-neutral-200/90 bg-white py-1 shadow-lg">
+                              <ul className="absolute left-0 right-0 top-full z-10 mt-2 max-h-[min(50vh,22rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white py-1 shadow-sm">
                                 {brandSuggestions.map((b) => (
                                   <li key={b}>
                                     <button
                                       type="button"
-                                      className="w-full px-6 py-3.5 text-left text-base font-medium tracking-tight text-neutral-800 hover:bg-neutral-50"
+                                      className="w-full px-6 py-3.5 text-left text-base font-medium tracking-tight text-slate-800 hover:bg-slate-50"
                                       onClick={() => {
                                         const rest = model.trim();
                                         setBrand(b);
@@ -1865,7 +1920,10 @@ export function EstimationForm() {
                             value={declinaison}
                             onChange={(e) => setDeclinaison(e.target.value)}
                             placeholder="Déclinaison (optionnel)"
-                            className="mt-5 h-12 w-full max-w-xl rounded-2xl border border-transparent bg-transparent text-center text-base tracking-wide text-neutral-500 outline-none placeholder:text-neutral-400 focus:border-neutral-200 sm:mt-6"
+                            className={cn(
+                              uiInput,
+                              "mt-5 h-12 w-full max-w-xl bg-slate-50/50 text-center text-base tracking-wide sm:mt-6"
+                            )}
                           />
                           <button
                             type="button"
@@ -1875,7 +1933,7 @@ export function EstimationForm() {
                               setModel("");
                               setCatalogSlug(null);
                             }}
-                            className="mt-4 text-sm font-medium text-neutral-500 underline underline-offset-4 hover:text-[#0a0a0a]"
+                            className="mt-4 text-sm font-medium text-slate-500 underline underline-offset-4 hover:text-slate-900"
                           >
                             Retour à la liste catalogue
                           </button>
@@ -1887,7 +1945,7 @@ export function EstimationForm() {
                   {step === 4 && (
                     <div className="mx-auto flex w-full max-w-xl flex-col sm:max-w-2xl">
                       <div
-                        className="flex flex-col gap-3 sm:gap-3.5"
+                        className="flex flex-col gap-4 sm:gap-5"
                         role="radiogroup"
                         aria-label="État général de l’article"
                       >
@@ -1907,21 +1965,21 @@ export function EstimationForm() {
                               whileTap={{ scale: 0.992 }}
                               onClick={() => selectCondition(id)}
                               className={cn(
-                                "group flex w-full items-start gap-3.5 rounded-2xl border px-4 py-4 text-left shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] transition-all duration-200 sm:gap-5 sm:rounded-3xl sm:px-5 sm:py-4",
-                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a0a0a]/15 focus-visible:ring-offset-2",
+                                "group flex w-full items-start gap-3.5 rounded-3xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:gap-5 sm:px-5 sm:py-4",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/20 focus-visible:ring-offset-2",
                                 active
-                                  ? "border-[#0a0a0a]/20 bg-gradient-to-br from-white to-neutral-50/90 shadow-[0_8px_28px_-12px_rgba(0,0,0,0.14)] ring-1 ring-[#0a0a0a]/5"
-                                  : "border-neutral-200/90 bg-white/90 hover:border-neutral-300/95 hover:bg-white hover:shadow-[0_6px_20px_-10px_rgba(0,0,0,0.1)]",
+                                  ? "border-emerald-500/40 bg-emerald-50/40 shadow-md ring-1 ring-emerald-500/20"
+                                  : "hover:border-slate-300",
                                 picking &&
                                   "ring-2 ring-emerald-400/45 ring-offset-2 ring-offset-white"
                               )}
                             >
                               <div
                                 className={cn(
-                                  "flex size-11 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold tabular-nums transition-all duration-200 sm:size-12 sm:rounded-[0.9rem]",
+                                  "flex size-11 shrink-0 items-center justify-center rounded-3xl text-sm font-semibold tabular-nums transition-all duration-200 sm:size-12 sm:rounded-[0.9rem]",
                                   active
-                                    ? "bg-[#0a0a0a] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
-                                    : "bg-neutral-100 text-neutral-500 group-hover:bg-neutral-200/80"
+                                    ? "bg-emerald-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+                                    : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/80"
                                 )}
                                 aria-hidden
                               >
@@ -1935,10 +1993,10 @@ export function EstimationForm() {
                                 )}
                               </div>
                               <div className="min-w-0 flex-1 pt-0.5">
-                                <p className="text-[15px] font-medium leading-snug tracking-wide text-neutral-800 sm:text-base">
+                                <p className="text-[15px] font-medium leading-snug tracking-wide text-slate-800 sm:text-base">
                                   {label}
                                 </p>
-                                <p className="mt-1.5 text-sm leading-relaxed text-neutral-500">
+                                <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
                                   {help}
                                 </p>
                               </div>
@@ -1951,9 +2009,9 @@ export function EstimationForm() {
 
                   {step === 5 && (
                     <div className="mx-auto flex w-full max-w-xl flex-col sm:max-w-2xl">
-                      <p className="mb-8 text-center text-sm leading-relaxed text-neutral-500 sm:mb-10">
+                      <p className="mb-8 text-center text-sm leading-relaxed text-slate-500 sm:mb-10">
                         Ces infos permettent d’ajuster le prix au plus juste.
-                        <span className="mt-1 block text-xs text-neutral-400">
+                        <span className="mt-1 block text-xs text-slate-400">
                           « Moyen » couvre déjà les défauts visibles importants.
                         </span>
                       </p>
@@ -1967,11 +2025,11 @@ export function EstimationForm() {
                             >
                               <p
                                 id="helmet-age-h"
-                                className="text-sm font-medium text-neutral-800"
+                                className="text-sm font-medium text-slate-800"
                               >
                                 Âge du casque
                               </p>
-                              <div className="flex flex-col gap-1.5 rounded-2xl border border-neutral-200/90 bg-neutral-100/35 p-1 sm:flex-row sm:gap-1.5">
+                              <div className="flex flex-col gap-1.5 rounded-3xl border border-slate-200/90 bg-slate-100/35 p-1 sm:flex-row sm:gap-1.5">
                                 {HELMET_AGE_OPTIONS.map((o) => (
                                   <motion.button
                                     key={o.id}
@@ -1981,8 +2039,8 @@ export function EstimationForm() {
                                     className={cn(
                                       "flex-1 rounded-xl px-3 py-3 text-center text-sm font-medium transition sm:py-3.5",
                                       helmetAgeBand === o.id
-                                        ? "bg-white text-[#0a0a0a] shadow-[0_2px_12px_-4px_rgba(0,0,0,0.12)]"
-                                        : "text-neutral-600 hover:text-neutral-900"
+                                        ? "bg-white text-slate-900 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.12)]"
+                                        : "text-slate-600 hover:text-slate-900"
                                     )}
                                   >
                                     {o.label}
@@ -1997,11 +2055,11 @@ export function EstimationForm() {
                             >
                               <p
                                 id="helmet-impact-h"
-                                className="text-sm font-medium text-neutral-800"
+                                className="text-sm font-medium text-slate-800"
                               >
                                 Chute ou impact sur la coque
                               </p>
-                              <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-neutral-200/90 bg-neutral-100/35 p-1">
+                              <div className="grid grid-cols-2 gap-1.5 rounded-3xl border border-slate-200/90 bg-slate-100/35 p-1">
                                 {(
                                   [
                                     { v: false as const, label: "Non" },
@@ -2018,8 +2076,8 @@ export function EstimationForm() {
                                       hadImpact === v
                                         ? v
                                           ? "bg-amber-100 text-amber-950 shadow-sm ring-1 ring-amber-200/80"
-                                          : "bg-white text-[#0a0a0a] shadow-[0_2px_12px_-4px_rgba(0,0,0,0.12)]"
-                                        : "text-neutral-600 hover:bg-white/60 hover:text-neutral-900"
+                                          : "bg-white text-slate-900 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.12)]"
+                                        : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
                                     )}
                                   >
                                     {label}
@@ -2027,7 +2085,7 @@ export function EstimationForm() {
                                 ))}
                               </div>
                               {hadImpact === true && (
-                                <p className="rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-center text-xs leading-relaxed text-amber-950 sm:text-[13px]">
+                                <p className="rounded-3xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-center text-xs leading-relaxed text-amber-950 sm:text-[13px]">
                                   Nous ne pouvons pas finaliser une offre en ligne
                                   pour un casque ayant subi un choc — une expertise
                                   reste possible par mail.
@@ -2041,7 +2099,7 @@ export function EstimationForm() {
                           <label
                             id="size-h"
                             htmlFor="equipment-size"
-                            className="block text-sm font-medium text-neutral-800"
+                            className="block text-sm font-medium text-slate-800"
                           >
                             {equipment === "gants" || equipment === "bottes"
                               ? "Taille"
@@ -2065,9 +2123,9 @@ export function EstimationForm() {
                             }
                             autoComplete="off"
                             className={cn(
-                              "h-[3.75rem] w-full rounded-3xl border border-neutral-200/95 bg-white px-6 text-center text-xl font-medium tracking-tight text-[#0a0a0a] shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08)] outline-none sm:h-20 sm:px-8 sm:text-2xl",
-                              "placeholder:text-neutral-400 placeholder:font-normal",
-                              "transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/8",
+                              uiInput,
+                              "h-[3.75rem] w-full px-6 text-center text-xl font-medium tracking-tight sm:h-20 sm:px-8 sm:text-2xl",
+                              "placeholder:font-normal",
                               stepHint &&
                                 (equipment === "gants" ||
                                   equipment === "bottes") &&
@@ -2083,7 +2141,7 @@ export function EstimationForm() {
                         >
                           <p
                             id="complete-h"
-                            className="text-sm font-medium text-neutral-800"
+                            className="text-sm font-medium text-slate-800"
                           >
                             Contenu de la vente
                           </p>
@@ -2095,18 +2153,18 @@ export function EstimationForm() {
                                 whileTap={{ scale: 0.995 }}
                                 onClick={() => setCompleteness(o.id)}
                                 className={cn(
-                                  "flex w-full items-start gap-3 rounded-2xl border px-4 py-3.5 text-left shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] transition sm:rounded-3xl sm:py-4",
+                                  "flex w-full items-start gap-3 rounded-3xl border border-slate-200 bg-white px-4 py-3.5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:py-4",
                                   completeness === o.id
-                                    ? "border-[#0a0a0a]/20 bg-gradient-to-br from-white to-neutral-50/90 ring-1 ring-[#0a0a0a]/5"
-                                    : "border-neutral-200/90 bg-white/90 hover:border-neutral-300"
+                                    ? "border-emerald-500/40 bg-emerald-50/35 shadow-md ring-1 ring-emerald-500/20"
+                                    : "hover:border-slate-300"
                                 )}
                               >
                                 <span
                                   className={cn(
                                     "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border text-[10px] font-bold",
                                     completeness === o.id
-                                      ? "border-[#0a0a0a] bg-[#0a0a0a] text-white"
-                                      : "border-neutral-200 bg-neutral-50 text-neutral-400"
+                                      ? "border-emerald-700 bg-emerald-700 text-white"
+                                      : "border-slate-200 bg-slate-50 text-slate-400"
                                   )}
                                   aria-hidden
                                 >
@@ -2114,7 +2172,7 @@ export function EstimationForm() {
                                     <Check className="size-3.5" weight="bold" />
                                   ) : null}
                                 </span>
-                                <span className="text-[15px] font-medium leading-snug text-neutral-800 sm:text-base">
+                                <span className="text-[15px] font-medium leading-snug text-slate-800 sm:text-base">
                                   {o.label}
                                 </span>
                               </motion.button>
@@ -2129,20 +2187,26 @@ export function EstimationForm() {
                     <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-1">
                       {submitError && (
                         <p
-                          className="w-full shrink-0 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-center text-xs text-red-800"
+                          className="w-full shrink-0 rounded-3xl border border-red-200 bg-red-50 px-3 py-2 text-center text-xs text-red-800 shadow-sm"
                           role="alert"
                         >
                           {submitError}
                         </p>
                       )}
                       {lowValue ? (
-                        <div className="w-full rounded-3xl border border-neutral-200/80 bg-gradient-to-b from-neutral-50/90 to-white px-6 py-8 text-center shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)]">
+                        <div
+                          className={cn(
+                            uiCard,
+                            uiCardLift,
+                            "w-full bg-gradient-to-b from-slate-50/90 to-white px-6 py-8 text-center"
+                          )}
+                        >
                           <Shield
-                            className="mx-auto mb-4 size-10 text-neutral-300"
+                            className="mx-auto mb-4 size-10 text-slate-300"
                             weight="regular"
                             aria-hidden
                           />
-                          <p className="text-base leading-relaxed text-neutral-600">
+                          <p className={cn(uiBody)}>
                             Pour cette catégorie, aucune déclaration additionnelle
                             n’est requise au-delà de votre honnêteté habituelle.
                           </p>
@@ -2160,19 +2224,19 @@ export function EstimationForm() {
                                 aria-checked={on}
                                 onClick={() => toggleSecurity(i as 0 | 1 | 2)}
                                 className={cn(
-                                  "group flex w-full items-center gap-3.5 rounded-2xl border px-4 py-4 text-left shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] transition-all duration-200 sm:gap-5 sm:rounded-3xl sm:px-5 sm:py-4",
-                                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a0a0a]/15 focus-visible:ring-offset-2",
+                                  "group flex w-full items-center gap-3.5 rounded-3xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:gap-5 sm:px-5 sm:py-4",
+                                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/20 focus-visible:ring-offset-2",
                                   on
-                                    ? "border-[#0a0a0a]/20 bg-gradient-to-br from-white to-neutral-50/90 shadow-[0_8px_28px_-12px_rgba(0,0,0,0.14)] ring-1 ring-[#0a0a0a]/5"
-                                    : "border-neutral-200/90 bg-white/90 hover:border-neutral-300/95 hover:bg-white hover:shadow-[0_6px_20px_-10px_rgba(0,0,0,0.1)]"
+                                    ? "border-emerald-500/40 bg-emerald-50/40 shadow-md ring-1 ring-emerald-500/20"
+                                    : "hover:border-slate-300"
                                 )}
                               >
                                 <div
                                   className={cn(
-                                    "flex size-11 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold tabular-nums transition-all duration-200 sm:size-12 sm:rounded-[0.9rem]",
+                                    "flex size-11 shrink-0 items-center justify-center rounded-3xl text-sm font-semibold tabular-nums transition-all duration-200 sm:size-12 sm:rounded-[0.9rem]",
                                     on
-                                      ? "bg-[#0a0a0a] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
-                                      : "bg-neutral-100 text-neutral-500 group-hover:bg-neutral-200/80"
+                                      ? "bg-emerald-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+                                      : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/80"
                                   )}
                                   aria-hidden
                                 >
@@ -2185,15 +2249,15 @@ export function EstimationForm() {
                                     String(i + 1).padStart(2, "0")
                                   )}
                                 </div>
-                                <span className="min-w-0 flex-1 text-[15px] font-medium leading-snug tracking-wide text-neutral-800 sm:text-base">
+                                <span className="min-w-0 flex-1 text-[15px] font-medium leading-snug tracking-wide text-slate-800 sm:text-base">
                                   {text}
                                 </span>
                                 <span
                                   className={cn(
                                     "relative flex h-9 w-[3.25rem] shrink-0 items-center rounded-full px-0.5 transition-colors duration-200",
                                     on
-                                      ? "bg-[#0a0a0a]"
-                                      : "bg-neutral-200/95 group-hover:bg-neutral-300/90"
+                                      ? "bg-emerald-700"
+                                      : "bg-slate-200/95 group-hover:bg-slate-300/90"
                                   )}
                                   aria-hidden
                                 >
@@ -2230,7 +2294,7 @@ export function EstimationForm() {
 
             {step !== 1 && (
               <footer
-                className="flex shrink-0 items-center justify-between gap-3 border-t border-neutral-100/90 px-5 py-3.5 sm:px-8 sm:py-4"
+                className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 px-5 py-3.5 sm:px-8 sm:py-4"
                 style={{
                   paddingBottom: `max(0.65rem, env(safe-area-inset-bottom), ${keyboardPad}px)`,
                 }}
@@ -2238,7 +2302,7 @@ export function EstimationForm() {
                 <button
                   type="button"
                   onClick={() => stepBack(step)}
-                  className="inline-flex h-12 items-center gap-2 rounded-full px-4 text-base font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-[#0a0a0a]"
+                  className={cn(uiBtnGhostBar, "font-medium")}
                 >
                   <ArrowLeft className="size-[1.125rem]" weight="regular" />
                   Retour
@@ -2247,7 +2311,7 @@ export function EstimationForm() {
                   <button
                     type="button"
                     onClick={tryAdvance}
-                    className="h-12 rounded-full bg-[#0a0a0a] px-9 text-base font-semibold tracking-wide text-white shadow-md transition hover:bg-neutral-800 sm:h-[3.25rem] sm:px-10"
+                    className={uiBtnPrimaryBar}
                   >
                     Continuer
                   </button>
@@ -2255,7 +2319,7 @@ export function EstimationForm() {
                   <button
                     type="submit"
                     disabled={!canSubmitEstimation}
-                    className="h-12 rounded-full bg-[#0a0a0a] px-9 text-base font-semibold tracking-wide text-white shadow-md transition hover:bg-neutral-800 disabled:opacity-40 sm:h-[3.25rem] sm:px-10"
+                    className={uiBtnPrimaryBar}
                   >
                     Obtenir le prix
                   </button>
