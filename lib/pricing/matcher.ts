@@ -1,4 +1,7 @@
-const COSMETIC_STOP_WORDS = new Set([
+/** Jetons normalisés (sans accents, lower-case). */
+export type NormalizedToken = string;
+
+const COSMETIC_STOP_WORDS = new Set<string>([
   "noir",
   "mat",
   "black",
@@ -15,7 +18,7 @@ const COSMETIC_STOP_WORDS = new Set([
   "destockage",
 ]);
 
-function normalizeToken(raw: string): string {
+function normalizeToken(raw: string): NormalizedToken {
   return raw
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -29,23 +32,24 @@ export function generateCanonicalSlug(brand: string, name: string): string {
   const normalizedBrand = normalizeToken(brand);
   const normalizedName = normalizeToken(name);
 
-  const brandTokens = normalizedBrand
+  const brandTokens: NormalizedToken[] = normalizedBrand
     .split(" ")
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
-  const nameTokens = normalizedName
+  const nameTokens: NormalizedToken[] = normalizedName
     .split(" ")
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
 
   // Pass 1: retire seulement les adjectifs marketing/couleurs.
   const cleanedName = nameTokens.filter((t) => !COSMETIC_STOP_WORDS.has(t));
-  const primary = [...brandTokens, ...cleanedName];
+  const primary: NormalizedToken[] = [...brandTokens, ...cleanedName];
 
   // Garde-fou: si trop épuré, on conserve le nom brut normalisé.
-  const tokens = primary.length >= 2 ? primary : [...brandTokens, ...nameTokens];
+  const tokens: NormalizedToken[] =
+    primary.length >= 2 ? primary : [...brandTokens, ...nameTokens];
 
-  const dedup: string[] = [];
+  const dedup: NormalizedToken[] = [];
   for (const t of tokens) {
     if (!t) continue;
     if (dedup[dedup.length - 1] !== t) dedup.push(t);

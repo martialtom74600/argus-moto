@@ -5,16 +5,16 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
-  BetweenHorizontalStart,
+  CaretDown,
   Check,
-  ChevronDown,
   Footprints,
-  HardHat,
   Hand,
+  HardHat,
   Package,
+  Pants,
   Shield,
-  Shirt,
-} from "lucide-react";
+  TShirt,
+} from "@phosphor-icons/react";
 import { filterBrands } from "@/lib/data/moto-brands";
 import {
   estimateRequestSchema,
@@ -157,8 +157,8 @@ type EstimateResult = EstimateOfferResult | EstimateFallbackResult;
 
 const equipmentOptions: { id: EquipmentId; icon: typeof HardHat }[] = [
   { id: "casque", icon: HardHat },
-  { id: "blouson", icon: Shirt },
-  { id: "pantalon", icon: BetweenHorizontalStart },
+  { id: "blouson", icon: TShirt },
+  { id: "pantalon", icon: Pants },
   { id: "gants", icon: Hand },
   { id: "bottes", icon: Footprints },
 ];
@@ -425,7 +425,7 @@ function TechnicalJournalDisclosure({ lines }: { lines: string[] }) {
       <summary className="cursor-pointer list-none text-[11px] font-medium tracking-[0.14em] text-neutral-400 transition hover:text-neutral-600 [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-1 border-b border-neutral-300/80 pb-0.5">
           Voir le journal technique
-          <ChevronDown className="size-3 transition group-open:rotate-180" />
+          <CaretDown className="size-3 transition group-open:rotate-180" />
         </span>
       </summary>
       <pre className="mx-auto mt-3 max-h-[30vh] max-w-lg overflow-hidden text-left font-mono text-[10px] leading-relaxed tracking-tight text-neutral-500">
@@ -1392,7 +1392,7 @@ export function EstimationForm() {
                 <div className="flex items-center gap-2 text-neutral-500">
                   <Package
                     className="size-4 shrink-0 opacity-70"
-                    strokeWidth={1.75}
+                    weight="regular"
                     aria-hidden
                   />
                   <span className="text-[11px] font-medium uppercase tracking-[0.16em]">
@@ -1412,7 +1412,7 @@ export function EstimationForm() {
                     <div className="flex size-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-neutral-100 via-neutral-50 to-neutral-200/60">
                       <EquipIcon
                         className="size-16 text-neutral-300"
-                        strokeWidth={1}
+                        weight="light"
                         aria-hidden
                       />
                       <span className="px-4 text-center text-xs font-medium text-neutral-400">
@@ -1424,7 +1424,7 @@ export function EstimationForm() {
 
                 <div className="mt-6 space-y-1 text-center sm:mt-7">
                   <p className="inline-flex items-center justify-center gap-1.5 rounded-full border border-neutral-200/90 bg-white/80 px-3 py-1 text-[11px] font-medium text-neutral-600">
-                    <EquipIcon className="size-3.5" strokeWidth={1.75} />
+                    <EquipIcon className="size-3.5" weight="regular" />
                     {equipmentLabel}
                   </p>
                   <h3 className="mt-3 text-xl font-semibold leading-tight tracking-tight text-[#0a0a0a] sm:text-2xl">
@@ -1654,13 +1654,13 @@ export function EstimationForm() {
                             >
                               {picking && (
                                 <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
-                                  <Check className="size-4" strokeWidth={2.5} />
+                                  <Check className="size-4" weight="bold" />
                                 </span>
                               )}
                               <span className="flex h-full w-full items-center justify-center text-neutral-400">
                                 <Icon
                                   className="size-11 sm:size-[3.25rem]"
-                                  strokeWidth={1.1}
+                                  weight="light"
                                 />
                               </span>
                             </motion.button>
@@ -1790,10 +1790,7 @@ export function EstimationForm() {
                                       )}
                                       {picked && (
                                         <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
-                                          <Check
-                                            className="size-4"
-                                            strokeWidth={2.5}
-                                          />
+                                          <Check className="size-4" weight="bold" />
                                         </span>
                                       )}
                                     </div>
@@ -1931,7 +1928,7 @@ export function EstimationForm() {
                                 {active ? (
                                   <Check
                                     className="size-5 sm:size-[1.35rem]"
-                                    strokeWidth={2.5}
+                                    weight="bold"
                                   />
                                 ) : (
                                   String(i + 1).padStart(2, "0")
@@ -2114,10 +2111,7 @@ export function EstimationForm() {
                                   aria-hidden
                                 >
                                   {completeness === o.id ? (
-                                    <Check
-                                      className="size-3.5"
-                                      strokeWidth={2.5}
-                                    />
+                                    <Check className="size-3.5" weight="bold" />
                                   ) : null}
                                 </span>
                                 <span className="text-[15px] font-medium leading-snug text-neutral-800 sm:text-base">
@@ -2145,7 +2139,7 @@ export function EstimationForm() {
                         <div className="w-full rounded-3xl border border-neutral-200/80 bg-gradient-to-b from-neutral-50/90 to-white px-6 py-8 text-center shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)]">
                           <Shield
                             className="mx-auto mb-4 size-10 text-neutral-300"
-                            strokeWidth={1.25}
+                            weight="regular"
                             aria-hidden
                           />
                           <p className="text-base leading-relaxed text-neutral-600">
@@ -2185,7 +2179,7 @@ export function EstimationForm() {
                                   {on ? (
                                     <Check
                                       className="size-5 sm:size-[1.35rem]"
-                                      strokeWidth={2.5}
+                                      weight="bold"
                                     />
                                   ) : (
                                     String(i + 1).padStart(2, "0")
@@ -2246,7 +2240,7 @@ export function EstimationForm() {
                   onClick={() => stepBack(step)}
                   className="inline-flex h-12 items-center gap-2 rounded-full px-4 text-base font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-[#0a0a0a]"
                 >
-                  <ArrowLeft className="size-[1.125rem]" strokeWidth={1.5} />
+                  <ArrowLeft className="size-[1.125rem]" weight="regular" />
                   Retour
                 </button>
                 {step < TOTAL_STEPS ? (

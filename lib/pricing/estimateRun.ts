@@ -1,5 +1,6 @@
 import { CERTIFIED_ARGUS_MIN_SIMILARITY } from "@/config/business";
 import { getServiceSupabase } from "@/lib/db/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   fetchInternalCrawlerPrice,
   isExternalMarketDisabled,
@@ -77,9 +78,61 @@ type RpcRow = {
   updated_at: string;
 };
 
+function parseRpcRow(raw: unknown): RpcRow | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const id = o.id;
+  const brand = o.brand;
+  const model = o.model;
+  const category = o.category;
+  const retailPriceRaw = o.retail_price;
+  const imageRaw = o.image_url;
+  const similarityRaw = o.similarity;
+  const updatedAt = o.updated_at;
+  if (typeof id !== "string") return null;
+  if (typeof brand !== "string") return null;
+  if (typeof model !== "string") return null;
+  if (typeof category !== "string") return null;
+  const retailPrice =
+    typeof retailPriceRaw === "number"
+      ? retailPriceRaw
+      : Number(retailPriceRaw);
+  if (!Number.isFinite(retailPrice)) return null;
+  let image_url: string | null = null;
+  if (imageRaw == null) image_url = null;
+  else if (typeof imageRaw === "string") image_url = imageRaw;
+  else return null;
+  const similarityNum =
+    typeof similarityRaw === "number"
+      ? similarityRaw
+      : Number(similarityRaw);
+  if (!Number.isFinite(similarityNum)) return null;
+  if (typeof updatedAt !== "string") return null;
+  return {
+    id,
+    brand,
+    model,
+    category,
+    retail_price: retailPrice,
+    image_url,
+    similarity: similarityNum,
+    updated_at: updatedAt,
+  };
+}
+
+function parseRpcRows(data: unknown): RpcRow[] {
+  if (!Array.isArray(data)) return [];
+  const out: RpcRow[] = [];
+  for (const item of data) {
+    const row = parseRpcRow(item);
+    if (row) out.push(row);
+  }
+  return out;
+}
+
 /** Best-effort : l’estimation ne doit jamais échouer si le RPC est absent ou refusé. */
 async function incrementSearchCount(
-  supabase: ReturnType<typeof getServiceSupabase>,
+  supabase: SupabaseClient,
   rowId: string
 ): Promise<void> {
   try {
@@ -151,7 +204,7 @@ function mergeDetailReview(
 }
 
 async function orchestrateAfterCatalogMatch(
-  supabase: ReturnType<typeof getServiceSupabase>,
+  supabase: SupabaseClient,
   row: RpcRow | null,
   similarity: number,
   crawlBrand: string,
@@ -461,7 +514,7 @@ export async function runEstimateBySlug(
       };
     }
 
-    const rows = (data ?? []) as RpcRow[];
+    const rows = parseRpcRows(data ?? []);
     const row = rows[0];
     if (!row) {
       return {
@@ -565,13 +618,9 @@ export async function runEstimate(
       };
     }
 
-    const rows = (data ?? []) as RpcRow[];
-    const row = rows[0];
-    const similarityRaw = row?.similarity;
-    const similarity =
-      typeof similarityRaw === "number"
-        ? similarityRaw
-        : Number(similarityRaw) || 0;
+    const rows = parseRpcRows(data ?? []);
+    const row = rows[0] ?? null;
+    const similarity = row?.similarity ?? 0;
 
     return orchestrateAfterCatalogMatch(
       supabase,

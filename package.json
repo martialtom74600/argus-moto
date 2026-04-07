@@ -7,19 +7,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:push": "npx supabase link --project-ref fdhxeihyngtwchegtucl && npx supabase db push",
-    "playwright:install": "playwright install chromium"
+    "db:push": "npx supabase link --project-ref fdhxeihyngtwchegtucl && npx supabase db push"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
+    "@phosphor-icons/react": "^2.1.10",
     "@supabase/supabase-js": "^2.49.4",
     "apify-client": "^2.21.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
-    "lucide-react": "^1.7.0",
     "next": "15.5.14",
-    "playwright": "^1.51.0",
     "proxy-agent": "^8.0.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",

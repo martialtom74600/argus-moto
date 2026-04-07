@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Camera, Scale, ShieldCheck } from "lucide-react";
+import { Camera, Scales, ShieldCheck } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -18,7 +18,7 @@ const steps = [
       "Trois angles suffisent pour un premier contrôle visuel clair.",
   },
   {
-    icon: Scale,
+    icon: Scales,
     title: "Nous vous indiquons une fourchette réaliste",
     description:
       "Basée sur l’occasion récente, sans promesse irréaliste.",
@@ -62,7 +62,7 @@ export default function HomePage() {
             <p className="mt-10 flex flex-wrap items-start gap-2.5 text-sm leading-relaxed text-slate-600">
               <ShieldCheck
                 className="mt-0.5 size-4 shrink-0 opacity-70"
-                strokeWidth={1.75}
+                weight="regular"
                 aria-hidden
               />
               <span>
@@ -80,7 +80,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Placeholder visuel large — à remplacer par photo détourée */}
           <div
             className="min-h-[16rem] w-full rounded-2xl bg-slate-200/70 sm:min-h-[20rem] lg:min-h-[26rem] xl:min-h-[28rem]"
             aria-hidden
@@ -108,7 +107,7 @@ export default function HomePage() {
                   <CardHeader className="px-6 pb-2 pt-8 sm:px-8 sm:pt-10">
                     <Icon
                       className="size-7 text-slate-400"
-                      strokeWidth={1.5}
+                      weight="regular"
                       aria-hidden
                     />
                     <CardTitle className="mt-5 text-base font-semibold leading-snug text-slate-900 sm:text-lg">
