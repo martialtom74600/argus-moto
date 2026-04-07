@@ -1413,7 +1413,7 @@ export function EstimationForm() {
                   ) : (
                     <div className="flex size-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200/60">
                       <EquipIcon
-                        className="size-16 text-slate-400"
+                        className="size-20 text-slate-400 sm:size-24"
                         aria-hidden
                       />
                       <span className="px-4 text-center text-xs font-medium text-slate-400">
@@ -1425,7 +1425,7 @@ export function EstimationForm() {
 
                 <div className="mt-6 space-y-1 text-center sm:mt-7">
                   <p className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200/90 bg-white/80 px-3 py-1 text-[11px] font-medium text-slate-600">
-                    <EquipIcon className="size-3.5" />
+                    <EquipIcon className="size-4 shrink-0 sm:size-[1.15rem]" />
                     {equipmentLabel}
                   </p>
                   <h3 className={cn("mt-3 leading-tight", uiHeadingSub)}>
@@ -1673,10 +1673,10 @@ export function EstimationForm() {
                               whileTap={{ scale: 0.97 }}
                               onClick={() => selectEquipment(id)}
                               className={cn(
-                                "group relative flex min-h-[10rem] flex-col items-center justify-center gap-4 border px-2 py-5 backdrop-blur-xl sm:min-h-[11rem] sm:gap-4 sm:py-6",
+                                "group relative flex min-h-[12rem] flex-col items-center justify-center gap-4 border px-2 py-5 backdrop-blur-xl sm:min-h-[14rem] sm:gap-4 sm:py-6",
                                 uiCard,
                                 uiCardLift,
-                                "min-h-[10rem] bg-white/85",
+                                "bg-white/85",
                                 picking &&
                                   "border-emerald-500 bg-emerald-50/60 shadow-md ring-1 ring-emerald-500/25"
                               )}
@@ -1694,11 +1694,11 @@ export function EstimationForm() {
                                   />
                                 </motion.span>
                               )}
-                              <span className="flex size-14 shrink-0 items-center justify-center sm:size-16">
+                              <span className="flex size-20 shrink-0 items-center justify-center sm:size-24">
                                 <Icon
                                   className={cn(
-                                    "size-12 shrink-0 transition-colors duration-300",
-                                    id === "pantalon" && "w-14 sm:w-[3.75rem]",
+                                    "size-16 shrink-0 transition-colors duration-300 sm:size-20",
+                                    id === "pantalon" && "w-[4.5rem] sm:w-[5.25rem]",
                                     picking
                                       ? "text-emerald-700"
                                       : "text-slate-600 group-hover:text-slate-800"

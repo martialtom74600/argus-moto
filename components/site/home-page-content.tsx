@@ -1,5 +1,6 @@
 "use client";
 
+import type * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -22,6 +23,8 @@ import {
   uiMotionHoverTap,
   uiOverline,
 } from "@/lib/ui/site-ui";
+import { LiveProductMarquee } from "@/components/home/live-product-marquee";
+import type { MarqueeCatalogProduct } from "@/lib/data/fetch-marquee-catalog-products";
 import { cn } from "@/lib/utils";
 
 const categoryItems = [
@@ -56,7 +59,12 @@ const fadeUpViewport = {
   amount: 0.25,
 };
 
-export function HomePageContent() {
+type HomePageContentProps = {
+  /** Produits catalogue pour le bandeau sous le hero (depuis `app/page.tsx`). */
+  marqueeProducts: MarqueeCatalogProduct[];
+};
+
+export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
   return (
     <div className="flex flex-col">
       <section className="relative overflow-hidden">
@@ -110,6 +118,10 @@ export function HomePageContent() {
         </div>
       </section>
 
+      <div className="border-b border-slate-200/80 bg-white">
+        <LiveProductMarquee products={marqueeProducts} />
+      </div>
+
       <section
         className="border-y border-slate-200 bg-slate-50/90 py-16 sm:py-20"
         aria-labelledby="categories-heading"
@@ -137,7 +149,7 @@ export function HomePageContent() {
               <li key={id} className="flex flex-col items-center gap-3">
                 <motion.div
                   className={cn(
-                    "flex size-[4.5rem] items-center justify-center backdrop-blur-sm sm:size-[5rem]",
+                    "flex size-24 items-center justify-center backdrop-blur-sm sm:size-28",
                     uiCard,
                     uiCardLift,
                     "bg-white/90"
@@ -152,8 +164,8 @@ export function HomePageContent() {
                 >
                   <Icon
                     className={cn(
-                      "size-12 text-slate-700",
-                      id === "pantalon" && "w-[3.25rem]"
+                      "size-16 text-slate-700 sm:size-20",
+                      id === "pantalon" && "w-[4.5rem] sm:w-[5.25rem]"
                     )}
                     aria-hidden
                   />
