@@ -1,0 +1,58 @@
+/** Suggestions locales pour l’auto-complétion (configurateur). */
+export const MOTO_BRANDS = [
+  "AGV",
+  "Airoh",
+  "Arai",
+  "Alpinestars",
+  "Bell",
+  "Bering",
+  "BMW Motorrad",
+  "Buse",
+  "Caberg",
+  "Dainese",
+  "Dexter",
+  "Fox",
+  "Furygan",
+  "Gaerner",
+  "HJC",
+  "Icon",
+  "Ixon",
+  "Klim",
+  "KTM",
+  "Leatt",
+  "LS2",
+  "Midland",
+  "Motorex",
+  "Nolan",
+  "Oakley",
+  "O’Neal",
+  "Rev’it",
+  "Raida",
+  "Robot Craftsman",
+  "Rukka",
+  "Scorpion",
+  "Schuberth",
+  "Scott",
+  "Segura",
+  "Shark",
+  "Shoei",
+  "Simpson",
+  "Spidi",
+  "Spyke",
+  "Sidi",
+  "TCX",
+  "Thor",
+  "Tourmaster",
+  "Triumph",
+  "Vemar",
+  "Vquattro",
+  "Weise",
+  "X-Lite",
+].sort((a, b) => a.localeCompare(b, "fr"));
+
+export function filterBrands(query: string, limit = 8): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const scored = MOTO_BRANDS.filter((b) => b.toLowerCase().includes(q));
+  return scored.slice(0, limit);
+}
