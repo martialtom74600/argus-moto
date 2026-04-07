@@ -1168,13 +1168,13 @@ export function EstimationForm() {
     } = estimateResult;
 
     const emailBody = [
-      `Offre : ${offer} €`,
+      `Prix de rachat proposé : ${offer} € (montant versé, frais et marge revente déjà pris en compte).`,
       `${match.brand} ${match.model}`,
-      `Neuf ref. ${match.retailPrice} €`,
+      `Réf. neuf ${match.retailPrice} €`,
       `${equipmentLabel} · ${conditionLabel}`,
     ].join("\n");
     const offerEmailHref = `mailto:contact@le-coin-moto.fr?subject=${encodeURIComponent(
-      `Rachat — ${offer} €`
+      `Rachat proposé — ${offer} €`
     )}&body=${encodeURIComponent(emailBody)}`;
 
     return (
@@ -1186,11 +1186,18 @@ export function EstimationForm() {
       >
         <div className="flex min-h-0 w-full max-w-lg flex-col items-center gap-3 overflow-hidden">
           <h2 className="text-2xl font-semibold tracking-tight text-[#0a0a0a]">
-            Voici notre meilleure offre d’achat
+            Prix de rachat proposé
           </h2>
-          <p className="max-w-sm text-lg leading-snug text-neutral-500">
-            Estimation valable 7 jours. Paiement sécurisé sous 48h après
-            réception.
+          <p className="max-w-sm text-base leading-relaxed text-neutral-600">
+            Voici le montant que nous vous versons si vous cédez l’article dans
+            l’état indiqué. Il inclut déjà nos frais (contrôle, logistique) et la
+            marge nécessaire pour que nous puissions le racheter, le traiter et
+            le revendre — un juste milieu pour que la reprise reste intéressante
+            pour vous et viable pour nous.
+          </p>
+          <p className="max-w-sm text-sm leading-snug text-neutral-500">
+            Estimation indicative, valable 7 jours. Paiement sécurisé sous 48 h
+            après réception et vérification.
           </p>
 
           {certifiedArgusMoto && (
@@ -1204,7 +1211,10 @@ export function EstimationForm() {
             </span>
           )}
 
-          <p className="text-7xl font-semibold tracking-tighter text-[#0a0a0a] tabular-nums sm:text-8xl">
+          <p
+            className="text-7xl font-semibold tracking-tighter text-[#0a0a0a] tabular-nums sm:text-8xl"
+            aria-label={`Montant que nous vous versons : ${offer} euros`}
+          >
             {offer}
             <span className="text-3xl font-medium text-neutral-400 sm:text-4xl">
               {" "}
@@ -1212,13 +1222,22 @@ export function EstimationForm() {
             </span>
           </p>
 
+          <p className="max-w-xs text-xs font-medium uppercase tracking-[0.12em] text-neutral-400">
+            versés à vous · tout compris
+          </p>
+
           <p className="max-w-sm text-sm leading-relaxed tracking-wide text-neutral-500">
-            Net vendeur (dont {LOGISTICS_FIXED_EUR} € logistique). Réf. neuf{" "}
+            Référence prix neuf{" "}
             {new Intl.NumberFormat("fr-FR", {
               style: "currency",
               currency: "EUR",
               maximumFractionDigits: 0,
             }).format(match.retailPrice)}
+            <span className="text-neutral-400">
+              {" "}
+              — nos frais (dont env. {LOGISTICS_FIXED_EUR} € pour la logistique
+              et le traitement) sont déjà déduits dans le montant ci-dessus.
+            </span>
             <br />
             <span className="text-neutral-700">
               {match.brand} {match.model}
@@ -1263,10 +1282,10 @@ export function EstimationForm() {
               paddingBottom: `max(0.75rem, env(safe-area-inset-bottom), ${keyboardPad}px)`,
             }}
           >
-            <button
-              type="button"
+            <a
+              href={offerEmailHref}
               className={cn(
-                "group relative h-14 w-full overflow-hidden rounded-full bg-[#0a0a0a] text-[15px] font-semibold tracking-wide text-white",
+                "group relative flex h-14 w-full items-center justify-center overflow-hidden rounded-full bg-[#0a0a0a] text-[15px] font-semibold tracking-wide text-white no-underline",
                 "shadow-[0_8px_30px_-8px_rgba(0,0,0,0.45)] transition hover:bg-[#151515]"
               )}
             >
@@ -1274,8 +1293,10 @@ export function EstimationForm() {
                 className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 transition duration-700 ease-out group-hover:translate-x-full group-hover:opacity-100"
                 aria-hidden
               />
-              <span className="relative z-[1]">Recevoir mes {offer} €</span>
-            </button>
+              <span className="relative z-[1]">
+                Demander ce rachat à {offer} €
+              </span>
+            </a>
 
             <a
               href={offerEmailHref}
