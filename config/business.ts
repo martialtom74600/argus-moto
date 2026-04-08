@@ -23,6 +23,14 @@ export const LOGISTICS_FIXED_EUR = 15;
 export const CERTIFIED_ARGUS_MIN_SIMILARITY = 0.9;
 
 /**
+ * En dessous de ce score (ou aucun RPC), le produit est considéré **hors base
+ * catalogue** (ex. SKU jamais ingérés du flux e-commerce). On n’essaie pas le
+ * crawler marché : le client passe par la **recherche visuelle** + prix neuf déclaré.
+ * Monter à ~0.55–0.65 si tu préfères tenter le marché sur les matchs « moyens ».
+ */
+export const MIN_CATALOG_TRUST_SIMILARITY = 0.5;
+
+/**
  * α_cat : part moyenne de la valeur « neuf » avant de compter l’état
  * (liquidité, obsolescence, perception de l’occasion). Voir PLAN_PRICING §2.2.
  */
@@ -43,6 +51,8 @@ export const CONDITION_WEIGHT: Record<string, number> = {
   "tres-bon": 0.85,
   bon: 0.7,
   "etat-moyen": 0.5,
+  /** Listing / signaux texte « ancien modèle » — plus conservateur que « patine marquée ». */
+  "ancien-modele": 0.45,
 };
 
 function helmetResellerMarginInternal(retailNeuf: number): number {

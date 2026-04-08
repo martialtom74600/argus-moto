@@ -44,6 +44,10 @@ const estimateRequestBase = z
   .object({
     category: categoryEnum,
     condition: conditionEnum,
+    /** Année d’achat (âge = année courante − cette valeur). */
+    purchaseYear: z
+      .number({ error: "Indiquez l’année d’achat." })
+      .int({ error: "Indiquez l’année d’achat." }),
     declinaison: declinaisonField,
     canonical_slug: z
       .string()
@@ -60,9 +64,75 @@ const estimateRequestBase = z
       .max(120)
       .optional()
       .transform((s) => s?.trim() ?? ""),
+    /** Prix neuf déclaré (reprise hors catalogue / fallback visuel). */
+    manualRetailEur: z
+      .number()
+      .positive()
+      .transform((n) => Math.round(n))
+      .optional(),
+    /**
+     * Saisie hors fiche catalogue : court-circuite le moteur et ouvre tout de suite
+     * l’étape recherche visuelle + prix neuf (sans `canonical_slug`).
+     */
+    forceVisualFallback: z.boolean().optional(),
+    /** Visuel choisi à l’étape galerie (URL image) — informations uniquement côté offre. */
+    pickedUrl: z.preprocess(
+      (val) => {
+        if (val == null || val === "") return undefined;
+        const t = String(val).trim();
+        return t.length > 0 ? t : undefined;
+      },
+      z.string().url().max(2048).optional()
+    ),
+    /** Cote moyenne extraite des résultats Serper (proxy images) — borne le prix déclaré. */
+    serperMarketPriceEur: z
+      .number()
+      .positive()
+      .transform((n) => Math.round(n))
+      .optional(),
+    /** Titre listing du visuel choisi (obsolescence). */
+    pickedImageTitle: z
+      .string()
+      .max(500)
+      .optional()
+      .transform((s) => (s?.trim() ? s.trim().slice(0, 500) : undefined)),
+    /** Obligatoire si catégorie casque — certification coques / chutes. */
+    physicalIntegrityCertified: z.boolean().optional(),
     ...detailFields,
   })
   .superRefine((val, ctx) => {
+    const refY = new Date().getFullYear();
+    if (val.purchaseYear < 1990 || val.purchaseYear > refY) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Année d’achat entre 1990 et ${refY}.`,
+        path: ["purchaseYear"],
+      });
+    }
+    if (val.canonical_slug && val.manualRetailEur != null) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Le prix neuf déclaré ne s’applique pas au parcours catalogue.",
+        path: ["manualRetailEur"],
+      });
+    }
+    if (val.canonical_slug && val.forceVisualFallback === true) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Le forçage visuel ne s’applique pas lorsqu’une fiche catalogue est sélectionnée.",
+        path: ["forceVisualFallback"],
+      });
+    }
+    if (val.canonical_slug && val.pickedUrl) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Le visuel sélectionné ne s’applique pas au parcours catalogue.",
+        path: ["pickedUrl"],
+      });
+    }
     if (val.canonical_slug) {
       /* catalogue : mêmes contraintes détails */
     } else {
@@ -95,6 +165,14 @@ const estimateRequestBase = z
           code: "custom",
           message: "Indiquez si le casque a subi un choc ou une chute.",
           path: ["hadImpact"],
+        });
+      }
+      if (val.physicalIntegrityCertified !== true) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "Cochez la certification sur l’intégrité du casque et l’origine des coques.",
+          path: ["physicalIntegrityCertified"],
         });
       }
     }
@@ -133,14 +211,21 @@ function normalizeDetails(val: z.infer<typeof estimateRequestBase>): EstimateDet
 export const estimateRequestSchema = estimateRequestBase.transform(
   (val): EstimateRequestValidated => {
     const details = normalizeDetails(val);
+    const physicalOk =
+      val.category === "casque"
+        ? val.physicalIntegrityCertified === true
+        : true;
+
     if (val.canonical_slug) {
       return {
         mode: "catalog",
         canonical_slug: val.canonical_slug,
         category: val.category,
         condition: val.condition,
+        purchaseYear: val.purchaseYear,
         declinaison: val.declinaison,
         details,
+        physicalIntegrityCertified: physicalOk,
       };
     }
     return {
@@ -149,8 +234,23 @@ export const estimateRequestSchema = estimateRequestBase.transform(
       model: val.model,
       category: val.category,
       condition: val.condition,
+      purchaseYear: val.purchaseYear,
       declinaison: val.declinaison,
       details,
+      physicalIntegrityCertified: physicalOk,
+      ...(val.manualRetailEur != null
+        ? { manualRetailEur: Math.round(val.manualRetailEur) }
+        : {}),
+      ...(val.forceVisualFallback === true
+        ? { forceVisualFallback: true as const }
+        : {}),
+      ...(val.pickedUrl ? { pickedUrl: val.pickedUrl } : {}),
+      ...(val.serperMarketPriceEur != null
+        ? { serperMarketPriceEur: Math.round(val.serperMarketPriceEur) }
+        : {}),
+      ...(val.pickedImageTitle
+        ? { pickedImageTitle: val.pickedImageTitle }
+        : {}),
     };
   }
 );
@@ -161,8 +261,10 @@ export type EstimateRequestValidated =
       canonical_slug: string;
       category: z.infer<typeof categoryEnum>;
       condition: z.infer<typeof conditionEnum>;
+      purchaseYear: number;
       declinaison?: string;
       details: EstimateDetailsPayload;
+      physicalIntegrityCertified: boolean;
     }
   | {
       mode: "manual";
@@ -170,6 +272,14 @@ export type EstimateRequestValidated =
       model: string;
       category: z.infer<typeof categoryEnum>;
       condition: z.infer<typeof conditionEnum>;
+      purchaseYear: number;
       declinaison?: string;
       details: EstimateDetailsPayload;
+      physicalIntegrityCertified: boolean;
+      manualRetailEur?: number;
+      forceVisualFallback?: boolean;
+      /** URL du visuel retenu par l’utilisateur (parcours hors catalogue). */
+      pickedUrl?: string;
+      serperMarketPriceEur?: number;
+      pickedImageTitle?: string;
     };

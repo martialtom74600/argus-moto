@@ -4,9 +4,9 @@ import type * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  ClipboardText,
-  Package,
-  HandCoins,
+  ChartLineUp,
+  ShareNetwork,
+  ShieldCheck,
 } from "@phosphor-icons/react";
 import {
   HelmetIcon,
@@ -37,19 +37,19 @@ const categoryItems = [
 
 const howSteps = [
   {
-    title: "Estimez",
-    body: "Sélectionnez votre équipement en quelques clics et recevez une offre alignée sur le marché.",
-    Icon: ClipboardText,
+    title: "1. Estimation au plus près du terrain",
+    body: "Vous décrivez le matériel. Nous croisons catalogue, historique et marché pour une fourchette de transmission réaliste.",
+    Icon: ChartLineUp,
   },
   {
-    title: "Expédiez",
-    body: "Emballez votre article : étiquette et mode d’envoi sécurisé vous sont indiqués.",
-    Icon: Package,
+    title: "2. Mandat signé, route ouverte",
+    body: "Vous validez le mandat : nous structurons la diffusion et qualifions les sollicitations. Le sérieux d’un briefing, sans le bruit des plateformes.",
+    Icon: ShareNetwork,
   },
   {
-    title: "Recevez votre paiement",
-    body: "Après contrôle, le montant convenu vous est versé rapidement, sans surprise.",
-    Icon: HandCoins,
+    title: "3. Expédition maîtrisée, fonds sécurisés",
+    body: "L’encaissement est verrouillé avant envoi. Étiquette, suivi : vous expédiez quand l’accord est clair.",
+    Icon: ShieldCheck,
   },
 ] as const;
 
@@ -118,62 +118,79 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
           }}
         />
         <div className="relative mx-auto max-w-6xl px-6 py-16 sm:px-8 sm:py-20 md:py-24 lg:px-10 lg:py-28">
-          <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-12">
-            <div className="mx-auto max-w-xl text-center lg:mx-0 lg:max-w-none lg:text-left">
-              <motion.div
-                initial={{ opacity: 0, y: 28 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+          <div className="flex flex-col gap-12 lg:gap-14">
+            <motion.div
+              initial={{ opacity: 0, y: 28 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full text-center lg:text-left"
+            >
+              <h1
+                className={cn(
+                  "w-full max-w-none text-balance font-extrabold text-slate-900",
+                  "tracking-[-0.02em] sm:tracking-[-0.01em]",
+                  "text-4xl leading-[1.22] sm:text-5xl sm:leading-[1.18]",
+                  "md:text-6xl md:leading-[1.14] lg:text-7xl lg:leading-[1.12]",
+                  "xl:text-[5.25rem] xl:leading-[1.1]"
+                )}
               >
-                <h1
-                  className={cn(
-                    "text-balance font-extrabold tracking-tighter text-slate-900",
-                    "text-4xl sm:text-5xl sm:leading-[1.04] md:text-6xl lg:text-7xl xl:text-[5.25rem] xl:leading-[1.02]"
-                  )}
+                Transmettez votre équipement. On s’occupe du reste.
+              </h1>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.6,
+                delay: 0.08,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              className="flex w-full flex-col items-center gap-10 text-center lg:max-w-3xl lg:items-start lg:text-left"
+            >
+              <p
+                className={cn(
+                  "max-w-2xl text-pretty text-lg font-medium leading-relaxed text-slate-600 sm:text-xl sm:leading-relaxed"
+                )}
+              >
+                Conciergerie moto : estimation marché en quelques minutes,
+                mandat clair, diffusion tenue et encaissement sécurisé —
+                pensé pour les pilotes qui veulent la même rigueur qu’en
+                atelier.
+              </p>
+              <div className="flex w-full flex-col items-center gap-4 lg:items-start">
+                <motion.div
+                  whileHover={{ y: -3 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                  className="w-full max-w-md"
                 >
-                  L’Argus leader de l’équipement moto.
-                </h1>
-                <p
-                  className={cn(
-                    "mt-6 max-w-xl text-pretty text-lg font-medium leading-relaxed text-slate-600 sm:mt-7 sm:text-xl sm:leading-snug lg:mx-0 lg:max-w-lg"
-                  )}
-                >
-                  Estimez et vendez vos articles en 2 minutes. La cote de
-                  l’occasion certifiée par des experts.
-                </p>
-                <div className="mt-10 flex flex-col items-center gap-4 sm:mt-12 lg:items-start">
-                  <motion.div
-                    whileHover={{ y: -3 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                  <Link
+                    href="/estimer"
+                    prefetch={false}
+                    className={cn(
+                      "inline-flex min-h-14 w-full items-center justify-center rounded-3xl bg-emerald-600 px-10",
+                      "text-base font-semibold tracking-tight text-white shadow-lg sm:text-lg",
+                      "transition-[background-color,box-shadow,transform] duration-200",
+                      "hover:bg-emerald-700 hover:shadow-xl focus-visible:outline-none",
+                      "focus-visible:ring-2 focus-visible:ring-emerald-500/45 focus-visible:ring-offset-2",
+                      "active:scale-[0.98] no-underline hover:text-white"
+                    )}
                   >
-                    <Link
-                      href="/estimer"
-                      prefetch={false}
-                      className={cn(
-                        "inline-flex min-h-14 w-full max-w-md items-center justify-center rounded-3xl bg-emerald-600 px-10",
-                        "text-base font-semibold tracking-tight text-white shadow-lg sm:text-lg",
-                        "transition-[background-color,box-shadow,transform] duration-200",
-                        "hover:bg-emerald-700 hover:shadow-xl focus-visible:outline-none",
-                        "focus-visible:ring-2 focus-visible:ring-emerald-500/45 focus-visible:ring-offset-2",
-                        "active:scale-[0.98] no-underline hover:text-white"
-                      )}
-                    >
-                      Estimer mon équipement
-                    </Link>
-                  </motion.div>
-                  <Link href="#comment-ca-marche" className={uiLinkSubtle}>
-                    Comment ça marche
+                    Estimer mon équipement
                   </Link>
-                </div>
-              </motion.div>
-            </div>
+                </motion.div>
+                <Link href="#comment-ca-marche" className={uiLinkSubtle}>
+                  Comment ça marche
+                </Link>
+              </div>
+            </motion.div>
 
             <div
-              className="relative mx-auto aspect-square w-full max-w-md lg:mx-0 lg:max-w-none lg:aspect-auto lg:min-h-[380px]"
+              className="relative w-full min-h-[300px] sm:min-h-[380px] lg:min-h-[420px]"
               aria-hidden
             >
               <div className="absolute inset-0 rounded-3xl border border-slate-200/50 bg-white/40 shadow-sm ring-1 ring-slate-200/30 backdrop-blur-[2px]" />
-              <div className="relative h-full min-h-[320px] sm:min-h-[380px]">
+              <div className="relative min-h-[300px] w-full sm:min-h-[380px] lg:min-h-[420px]">
                 {heroIconLayout.map(
                   ({ Icon, position, iconClass, delay, floatDuration }, i) => (
                     <motion.div
@@ -183,7 +200,7 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
                       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                       transition={{
                         duration: 0.75,
-                        delay: 0.15 + delay,
+                        delay: 0.2 + delay,
                         ease: [0.22, 1, 0.36, 1],
                       }}
                     >
@@ -217,7 +234,7 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
               "text-center text-[11px] text-slate-600 sm:text-xs"
             )}
           >
-            Ils nous ont fait confiance pour leur équipement.
+            Du matériel qui reprend la route avec d’autres passionnés.
           </p>
         </div>
         <div className="pb-6 pt-8 sm:pb-8 sm:pt-10">
@@ -238,7 +255,7 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
             className="text-center"
           >
             <p id="categories-heading" className={cn(uiOverline)}>
-              Équipements repris
+              Ce que nous accompagnons
             </p>
           </motion.div>
           <motion.ul
@@ -295,7 +312,9 @@ export function HomePageContent({ marqueeProducts }: HomePageContentProps) {
             Comment ça marche
           </h2>
           <p className={cn("mx-auto mt-4 max-w-lg text-center sm:text-lg", uiBody)}>
-            Un parcours clair, du premier clic au virement.
+            Tiers de confiance entre passionnés : vous définissez l’estimation
+            avec nous, nous orchestrons la transmission — règles et commission
+            transparentes, sans stock ni frais cachés.
           </p>
           <div className="mt-12 grid gap-6 sm:grid-cols-3 sm:gap-6 lg:mt-14 lg:gap-8">
             {howSteps.map(({ title, body, Icon }, i) => (

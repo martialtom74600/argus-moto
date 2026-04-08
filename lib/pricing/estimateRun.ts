@@ -1,4 +1,7 @@
-import { CERTIFIED_ARGUS_MIN_SIMILARITY } from "@/config/business";
+import {
+  CERTIFIED_ARGUS_MIN_SIMILARITY,
+  MIN_CATALOG_TRUST_SIMILARITY,
+} from "@/config/business";
 import { getServiceSupabase } from "@/lib/db/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -40,7 +43,11 @@ export type EstimateSuccessBody = {
   success: true;
   pricingSource: "catalog_instant" | "internal_crawler" | "argus_predictif";
   /** instant | rafraîchissement catalogue | acquisition hors match fort */
-  orchestratorPath?: "instant" | "catalog_refresh" | "market_acquisition";
+  orchestratorPath?:
+    | "instant"
+    | "catalog_refresh"
+    | "market_acquisition"
+    | "declared_retail";
   match: {
     brand: string;
     model: string;
@@ -57,6 +64,16 @@ export type EstimateSuccessBody = {
   certifiedArgusMoto?: boolean;
   retailerSource?: string | null;
   isOfficialFeed?: boolean;
+  /** Visuel retenu (recherche Web + galerie), pour récap côté client. */
+  pickedImageUrl?: string;
+  /** Ex. plafonnement sur la cote Serper. */
+  marketPricingNote?: string;
+  /** État réellement appliqué au calcul (ex. détection listing « ancien modèle »). */
+  forcedCondition?: "ancien-modele";
+  /** Incohérence année vs URL archive. */
+  consistencyWarning?: string;
+  /** Dossier signalé pour contrôle manuel (cohérence). */
+  needsManualVerification?: boolean;
 };
 
 export type EstimateFallbackBody = {
@@ -65,6 +82,11 @@ export type EstimateFallbackBody = {
   fallback: true;
   /** Si vrai, l’API ne doit pas substituer un fallback Argus automatique. */
   skipSovereignOffer?: boolean;
+  /**
+   * Si vrai, le client affiche l’étape fallback visuel + saisie du prix neuf
+   * au lieu de l’Argus souverain automatique.
+   */
+  visualFallback?: boolean;
 };
 
 type RpcRow = {
@@ -240,6 +262,25 @@ async function orchestrateAfterCatalogMatch(
     orchestratorPath,
   });
 
+  const catalogueTrustworthy =
+    row != null && similarity >= MIN_CATALOG_TRUST_SIMILARITY;
+
+  if (!catalogueTrustworthy) {
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        success: false,
+        message:
+          row == null
+            ? "Ce modèle ne figure pas dans notre base catalogue synchronisée. Nous affinons l’estimation avec une recherche visuelle et votre prix neuf indicatif."
+            : "La correspondance avec notre catalogue est trop incertaine : nous continuons avec une recherche visuelle et votre prix neuf indicatif.",
+        fallback: true,
+        visualFallback: true,
+      },
+    };
+  }
+
   if (row?.id) {
     await incrementSearchCount(supabase, row.id);
   }
@@ -262,6 +303,7 @@ async function orchestrateAfterCatalogMatch(
           success: false,
           message: "Référence nécessitant une expertise.",
           fallback: true,
+          visualFallback: true,
         },
       };
     }
@@ -334,6 +376,7 @@ async function orchestrateAfterCatalogMatch(
           ? "Mode mock actif : la synchro marché est simulée."
           : "Référence nécessitant une expertise.",
         fallback: true,
+        visualFallback: true,
       },
     };
   }
@@ -524,6 +567,7 @@ export async function runEstimateBySlug(
           success: false,
           message: "Référence absente du catalogue pour cette catégorie.",
           fallback: true,
+          visualFallback: true,
         },
       };
     }

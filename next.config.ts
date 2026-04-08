@@ -36,7 +36,13 @@ const nextConfig: NextConfig = {
     ],
   },
   /** apify-client charge `proxy-agent` en require dynamique : ne pas bundler. */
-  serverExternalPackages: ["apify-client", "proxy-agent"],
+  serverExternalPackages: [
+    "apify-client",
+    "proxy-agent",
+    "@xenova/transformers",
+    "sharp",
+    "onnxruntime-node",
+  ],
   async headers() {
     return [
       {

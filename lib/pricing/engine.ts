@@ -1,3 +1,9 @@
+import {
+  AGE_LIMITS_BY_CATEGORY,
+  CATEGORY_DISPLAY_PLURAL,
+  type EquipmentCategoryId,
+} from "@/lib/business/rules";
+
 export type CleanMedianResult = {
   median: number | null;
   confidenceScore: number;
@@ -41,4 +47,85 @@ export function calculateCleanMedian(prices: number[]): CleanMedianResult {
     totalCount,
     validCount,
   };
+}
+
+export type PurchaseYearGateFailure = {
+  ok: false;
+  blockReason: "TOO_OLD";
+  maxAgeYears: number;
+  categoryDisplayPlural: string;
+};
+
+export type PurchaseYearGateResult =
+  | { ok: true }
+  | PurchaseYearGateFailure;
+
+/**
+ * Âge = année de référence − année d’achat. Au-delà du plafond catégorie → pas d’offre cash.
+ */
+export function evaluatePurchaseYearGate(
+  category: EquipmentCategoryId,
+  purchaseYear: number,
+  referenceYear: number = new Date().getFullYear()
+): PurchaseYearGateResult {
+  const limit = AGE_LIMITS_BY_CATEGORY[category];
+  const age = referenceYear - purchaseYear;
+  if (age > limit) {
+    return {
+      ok: false,
+      blockReason: "TOO_OLD",
+      maxAgeYears: limit,
+      categoryDisplayPlural: CATEGORY_DISPLAY_PLURAL[category],
+    };
+  }
+  return { ok: true };
+}
+
+const USER_PRICE_VS_MARKET_MAX_RATIO = 1.2;
+
+export type UserPriceValidationResult = {
+  effectiveRetailEur: number;
+  priceAdjustedByMarket: boolean;
+  adjustMessage?: string;
+};
+
+export type UserPriceValidationOptions = {
+  /** Listing archive (URL) : la cote Serper prime sur une saisie trop élevée. */
+  listingAppearsArchived?: boolean;
+};
+
+/**
+ * Si le prix déclaré dépasse nettement la cote extraite du marché, on plafonne sur la cote (honnêteté).
+ * Si la fiche ressemble à une archive et que la cote est inférieure à la saisie, plafond sur la cote + message historique.
+ */
+export function validateUserPrice(
+  userPrice: number,
+  estimatedMarketPrice: number | null | undefined,
+  options?: UserPriceValidationOptions
+): UserPriceValidationResult {
+  const em = estimatedMarketPrice;
+  const marketOk =
+    em != null && Number.isFinite(em) && em > 0;
+  const marketRounded = marketOk ? Math.round(Number(em)) : 0;
+
+  if (options?.listingAppearsArchived === true && marketOk && userPrice > marketRounded) {
+    return {
+      effectiveRetailEur: marketRounded,
+      priceAdjustedByMarket: true,
+      adjustMessage: `Prix neuf ajusté selon nos bases de données historiques (${marketRounded} €).`,
+    };
+  }
+
+  if (!marketOk) {
+    return { effectiveRetailEur: userPrice, priceAdjustedByMarket: false };
+  }
+  const cap = marketRounded * USER_PRICE_VS_MARKET_MAX_RATIO;
+  if (userPrice > cap) {
+    return {
+      effectiveRetailEur: marketRounded,
+      priceAdjustedByMarket: true,
+      adjustMessage: "Prix ajusté selon la cote du marché",
+    };
+  }
+  return { effectiveRetailEur: userPrice, priceAdjustedByMarket: false };
 }

@@ -65,7 +65,7 @@ function MarqueeCard({
         ) : (
           <Image
             src={product.imageUrl}
-            alt={label || "Produit"}
+            alt={label || "Équipement catalogue"}
             fill
             className="object-contain object-center p-3"
             sizes="280px"
@@ -83,11 +83,11 @@ function MarqueeCard({
         </p>
         {buybackPrice != null ? (
           <p className="pt-1 text-base font-bold tabular-nums tracking-tight text-emerald-600">
-            Rachat immédiat : {formatEur(buybackPrice)} €
+            Fourchette indicative : {formatEur(buybackPrice)} €
           </p>
         ) : (
           <p className="pt-1 text-base font-bold tracking-tight text-emerald-600">
-            Rachat immédiat : estimez en ligne
+            Estimer ce type d’équipement
           </p>
         )}
       </div>
@@ -124,7 +124,7 @@ export function LiveProductMarquee({ products }: LiveProductMarqueeProps) {
   if (products.length === 0) {
     return (
       <div className="border-y border-slate-200/80 bg-slate-50/70 py-10">
-        <p className="text-center text-sm text-slate-500">Chargement des offres…</p>
+        <p className="text-center text-sm text-slate-500">Chargement du fil catalogue…</p>
       </div>
     );
   }

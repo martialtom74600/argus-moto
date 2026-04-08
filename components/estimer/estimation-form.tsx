@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   HelmetIcon,
@@ -15,10 +16,10 @@ import {
   CaretDown,
   Check,
   CheckCircle,
+  MagnifyingGlass,
   Package,
   Shield,
 } from "@phosphor-icons/react";
-import { filterBrands } from "@/lib/data/moto-brands";
 import {
   estimateRequestSchema,
   type CompletenessId,
@@ -26,7 +27,6 @@ import {
 } from "@/lib/validation/estimateBody";
 import type { CatalogModelRow } from "@/app/api/catalog/models/route";
 import { cn } from "@/lib/utils";
-import { LOGISTICS_FIXED_EUR } from "@/config/business";
 import {
   uiBody,
   uiBodySm,
@@ -40,8 +40,22 @@ import {
   uiInput,
   uiLinkSubtle,
   uiOverline,
-  uiPanelMuted,
 } from "@/lib/ui/site-ui";
+import {
+  LeadCaptureStep,
+  type LeadPayload,
+} from "@/components/estimer/lead-capture-step";
+import {
+  PhotoUploadStep,
+  type PhotoSlotId,
+} from "@/components/estimer/photo-upload-step";
+import {
+  ResultScreen,
+  ResultTooOldScreen,
+  type MarketRange,
+} from "@/components/estimer/result-screen";
+import { SuccessScreen } from "@/components/estimer/success-screen";
+import { VisualFallbackStep } from "@/components/estimer/visual-fallback-step";
 
 const TOTAL_STEPS = 6;
 const ANALYSIS_MIN_VISIBLE_MS = 2000;
@@ -53,8 +67,8 @@ const BREADCRUMB_LABELS = [
   "Équipement",
   "Marque",
   "Modèle",
-  "État",
-  "Précisions",
+  "Patine",
+  "Détails",
   "Sécurité",
 ] as const;
 
@@ -63,34 +77,34 @@ const STEP_COPY: Record<
   { title: string; subtitle: string }
 > = {
   1: {
-    title: "Commençons par l’essentiel",
+    title: "Qu’est-ce que vous souhaitez transmettre ?",
     subtitle:
-      "Quel type d’équipement souhaitez-vous nous céder ?",
+      "Casque, textile, gants ou bottes : indiquez la famille de protection concernée.",
   },
   2: {
-    title: "Choisissez la marque",
+    title: "Quelle marque ?",
     subtitle:
-      "Sélectionnez une marque présente dans notre catalogue pour afficher les modèles disponibles.",
+      "Saisissez ou choisissez dans la liste : elle s’ouvre juste sous le champ et fait descendre la suite de la page, tout en fluidité.",
   },
   3: {
-    title: "Quel modèle possédez-vous ?",
+    title: "Quel modèle ?",
     subtitle:
-      "Touchez votre modèle ou utilisez la saisie manuelle si vous ne le trouvez pas.",
+      "Référence ou fiche catalogue : les propositions apparaissent en dessous ; sinon, continuez en texte libre.",
   },
   4: {
-    title: "État de l’article",
+    title: "Patine et histoire du matériel",
     subtitle:
-      "Choisissez l’option qui décrit le mieux l’état général — vous affinerez le reste à l’étape suivante.",
+      "Soyez franc sur l’usage réel : la patine, les kilomètres de route, l’entretien — on affine au pas suivant.",
   },
   5: {
-    title: "Quelques précisions",
+    title: "Les détails qui sécurisent l’estimation",
     subtitle:
-      "Taille, contenu de la vente, et pour un casque : âge et choc éventuel.",
+      "Taille, contenu du lot, et pour un casque : ancienneté et intégrité de la coque.",
   },
   6: {
-    title: "Engagement de sécurité",
+    title: "La sécurité avant tout",
     subtitle:
-      "La sécurité des motards est notre priorité. Certifiez l’intégrité de l’équipement, puis lancez l’estimation.",
+      "Un équipement doit protéger le pilote suivant comme il vous a protégé. Confirmez la véracité de ce que vous déclarez, puis lancez l’analyse.",
   },
 };
 
@@ -164,6 +178,8 @@ type ConditionId =
   | "etat-moyen";
 type FlowPhase = "form" | "analyzing" | "result";
 
+type ConciergeFlow = "idle" | "lead" | "photos" | "success";
+
 type EstimateOfferResult = {
   kind: "offer";
   offer: number;
@@ -177,9 +193,72 @@ type EstimateOfferResult = {
   certifiedArgusMoto?: boolean;
   retailerSource?: string;
   isOfficialFeed?: boolean;
+  /** Image choisie à la galerie Web (parcours hors catalogue). */
+  pickedImageUrl?: string;
+  marketPricingNote?: string;
+  forcedCondition?: "ancien-modele";
+  consistencyWarning?: string;
+  needsManualVerification?: boolean;
 };
-type EstimateFallbackResult = { kind: "fallback"; message: string };
-type EstimateResult = EstimateOfferResult | EstimateFallbackResult;
+type EstimateFallbackResult = {
+  kind: "fallback";
+  message: string;
+  /** Renvoyé par l’API : afficher l’étape visuelle + prix neuf déclaré. */
+  visualFallback?: boolean;
+};
+type EstimateTooOldResult = {
+  kind: "too_old";
+  maxAgeYears: number;
+  categoryDisplayPlural: string;
+};
+type EstimateResult =
+  | EstimateOfferResult
+  | EstimateFallbackResult
+  | EstimateTooOldResult;
+
+/** Fourchette large : bas = rachat express, haut = vente directe indicative. */
+function deriveMarketRange(
+  estimatedResaleEur: number | undefined,
+  engineOffer: number
+): MarketRange | null {
+  const resale =
+    typeof estimatedResaleEur === "number" &&
+    estimatedResaleEur > 0 &&
+    Number.isFinite(estimatedResaleEur)
+      ? Math.round(estimatedResaleEur)
+      : null;
+  const engine =
+    typeof engineOffer === "number" &&
+    Number.isFinite(engineOffer) &&
+    engineOffer > 0
+      ? Math.round(engineOffer)
+      : null;
+
+  if (resale != null && engine != null) {
+    let low = Math.min(resale, engine);
+    let high = Math.max(resale, engine);
+    if (high <= low) {
+      low = Math.max(1, Math.round(low * 0.85));
+      high = Math.round(Math.max(resale, engine) * 1.15);
+    } else {
+      const spreadPct = ((high - low) / low) * 100;
+      if (spreadPct < 10) {
+        const mid = Math.round((low + high) / 2);
+        low = Math.max(1, Math.round(mid * 0.88));
+        high = Math.round(mid * 1.12);
+      }
+    }
+    return { lowEur: low, highEur: Math.max(high, low) };
+  }
+
+  const mid = resale ?? engine;
+  if (mid == null || mid <= 0) return null;
+
+  return {
+    lowEur: Math.max(1, Math.round(mid * 0.78)),
+    highEur: Math.round(mid * 1.22),
+  };
+}
 
 const equipmentOptions: {
   id: EquipmentId;
@@ -201,30 +280,34 @@ const conditionOptions: {
   {
     id: "neuf-etiquette",
     label: "Neuf",
-    help: "Jamais porté ou utilisé, étiquettes possibles, aspect neuf.",
+    help: "Jamais équipé en conditions réelles, étiquettes possibles, état showroom.",
   },
   {
     id: "tres-bon",
-    label: "Très bon",
-    help: "Traces légères d’usage, aucun défaut majeur, ensemble sûr.",
+    label: "Très bon état",
+    help: "Patine légère, pas de défaut structurel, matériel fiable et propre.",
   },
   {
     id: "bon",
-    label: "Bon",
-    help: "Usure visible mais équipement sûr, propre et fonctionnel.",
+    label: "Bon état",
+    help: "Patine visible, rien qui compromette la protection : ensemble cohérent et prêt à rouler.",
   },
   {
     id: "etat-moyen",
-    label: "Moyen",
-    help: "Forte usure ou défauts visibles — impact sur le prix estimé.",
+    label: "Patine marquée",
+    help: "Usure forte ou défauts visibles : la fourchette reflète un constat honnête.",
   },
 ];
 
 const SECURITY_COPY = [
-  "Je certifie être le propriétaire légitime de l’article.",
-  "Je certifie que les informations fournies reflètent l’état réel.",
-  "Je comprends qu’une fausse déclaration peut invalider l’estimation.",
+  "Je certifie être le propriétaire légitime de cet équipement.",
+  "Je certifie que ces informations reflètent l’état réel du matériel.",
+  "Je comprends qu’une déclaration inexacte peut invalider l’estimation.",
 ] as const;
+
+/** Certification obligatoire casque — alignée sur la validation API. */
+const PHYSICAL_INTEGRITY_COPY =
+  "Je certifie que le produit ne présente aucune chute et que les coques sont d’origine. Toute fausse déclaration annulera l’offre lors de l’expertise physique.";
 
 const HELMET_AGE_OPTIONS: {
   id: HelmetAgeBand;
@@ -236,7 +319,7 @@ const HELMET_AGE_OPTIONS: {
 ];
 
 const COMPLETENESS_OPTIONS: { id: CompletenessId; label: string }[] = [
-  { id: "complete", label: "Complet (boîte & accessoires)" },
+  { id: "complete", label: "Lot complet (boîte & accessoires d’origine)" },
   { id: "no-box", label: "Sans boîte d’origine" },
   { id: "accessories-missing", label: "Accessoires manquants" },
 ];
@@ -335,22 +418,6 @@ function BrandsSkeleton() {
   );
 }
 
-function ModelsSkeleton() {
-  return (
-    <div className="grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className={cn("flex flex-col gap-2 border border-slate-200/80 p-3", uiPanelMuted)}
-        >
-          <div className="aspect-square w-full animate-pulse rounded-3xl bg-slate-200/80" />
-          <div className="mx-auto h-3 w-4/5 animate-pulse rounded-lg bg-slate-200/90" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function AnalysisLogLines({
   lines,
   exiting,
@@ -428,7 +495,7 @@ function TechnicalJournalDisclosure({ lines }: { lines: string[] }) {
     <details className="group mt-8 text-center">
       <summary className="cursor-pointer list-none text-[11px] font-semibold tracking-[0.14em] text-slate-500 transition hover:text-slate-700 [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-1 border-b border-slate-300/80 pb-0.5">
-          Voir le journal technique
+          Voir le journal d’analyse
           <CaretDown className="size-3 transition group-open:rotate-180" />
         </span>
       </summary>
@@ -441,6 +508,7 @@ function TechnicalJournalDisclosure({ lines }: { lines: string[] }) {
 
 export function EstimationForm() {
   useBodyScrollLock(true);
+  const router = useRouter();
   const keyboardPad = useVisualViewportInset();
 
   const [step, setStep] = React.useState(1);
@@ -451,8 +519,8 @@ export function EstimationForm() {
   const [declinaison, setDeclinaison] = React.useState("");
   const [condition, setCondition] = React.useState<ConditionId | null>(null);
   const [securityChecks, setSecurityChecks] = React.useState<
-    [boolean, boolean, boolean]
-  >([false, false, false]);
+    [boolean, boolean, boolean, boolean]
+  >([false, false, false, false]);
   const [flowPhase, setFlowPhase] = React.useState<FlowPhase>("form");
   const [estimateResult, setEstimateResult] =
     React.useState<EstimateResult | null>(null);
@@ -463,7 +531,7 @@ export function EstimationForm() {
   const [analysisExiting, setAnalysisExiting] = React.useState(false);
   const [brandOpen, setBrandOpen] = React.useState(false);
   const [catalogSlug, setCatalogSlug] = React.useState<string | null>(null);
-  const [manualEntry, setManualEntry] = React.useState(false);
+  const [modelOpen, setModelOpen] = React.useState(false);
   const [distinctBrands, setDistinctBrands] = React.useState<string[]>([]);
   const [brandsLoading, setBrandsLoading] = React.useState(false);
   const [catalogModels, setCatalogModels] = React.useState<CatalogModelRow[]>(
@@ -479,13 +547,24 @@ export function EstimationForm() {
   const [equipmentSize, setEquipmentSize] = React.useState("");
   const [completeness, setCompleteness] =
     React.useState<CompletenessId>("complete");
+  /** Année d’achat (obligatoire pour l’API / plafond d’âge). */
+  const [purchaseYear, setPurchaseYear] = React.useState<number | null>(null);
   const [equipSelecting, setEquipSelecting] = React.useState<EquipmentId | null>(
     null
   );
   const [condSelecting, setCondSelecting] = React.useState<ConditionId | null>(
     null
   );
-  const brandBoxRef = React.useRef<HTMLDivElement>(null);
+  const [conciergeFlow, setConciergeFlow] =
+    React.useState<ConciergeFlow>("idle");
+  const [visualFallbackBusy, setVisualFallbackBusy] = React.useState(false);
+  const [capturedLead, setCapturedLead] = React.useState<LeadPayload | null>(
+    null
+  );
+  const [leadPipelineSubmitting, setLeadPipelineSubmitting] =
+    React.useState(false);
+  const brandPanelRef = React.useRef<HTMLDivElement>(null);
+  const modelPanelRef = React.useRef<HTMLDivElement>(null);
   const brandSearchRef = React.useRef<HTMLInputElement>(null);
   const modelInputRef = React.useRef<HTMLInputElement>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -495,16 +574,18 @@ export function EstimationForm() {
   const condAdvanceTimerRef = React.useRef<number | null>(null);
   const modelPickTimerRef = React.useRef<number | null>(null);
 
-  const brandSuggestions = React.useMemo(
-    () => filterBrands(brand, 5),
-    [brand]
-  );
-
   const resolvedBrandLabel = React.useMemo(() => {
     const t = brand.trim().toLowerCase();
     const hit = distinctBrands.find((b) => b.toLowerCase() === t);
     return (hit ?? brand).trim();
   }, [brand, distinctBrands]);
+
+  const purchaseYearChoices = React.useMemo(() => {
+    const y = new Date().getFullYear();
+    const years: number[] = [];
+    for (let yr = y; yr >= 1990; yr -= 1) years.push(yr);
+    return years;
+  }, []);
 
   const brandChoices = React.useMemo(() => {
     const q = brand.trim().toLowerCase();
@@ -514,23 +595,39 @@ export function EstimationForm() {
       .slice(0, 100);
   }, [brand, distinctBrands]);
 
-  const combinedModelValue =
-    brand.trim() && model.trim()
-      ? `${brand.trim()} ${model.trim()}`
-      : brand.trim() || model.trim();
-
-  const setFromCombined = (raw: string) => {
-    const v = raw.trimStart();
-    const end = v.length;
-    let i = 0;
-    while (i < end && v[i] !== " ") i++;
-    const b = v.slice(0, i).trimEnd();
-    const m = v.slice(i).trim();
-    setBrand(b);
-    setModel(m);
-  };
+  const modelSuggestions = React.useMemo(() => {
+    const q = model.trim().toLowerCase();
+    if (!q) return catalogModels.slice(0, 12);
+    return catalogModels
+      .filter((r) => {
+        const m = r.model.toLowerCase();
+        return m.includes(q) || m.replace(/\s+/g, " ").includes(q);
+      })
+      .slice(0, 12);
+  }, [catalogModels, model]);
 
   const commitEstimateResult = React.useCallback((data: unknown) => {
+    const rec = data as Record<string, unknown>;
+    if (rec.blocked === true && rec.blockReason === "TOO_OLD") {
+      const maxAgeYears = rec.maxAgeYears;
+      const categoryDisplayPlural = rec.categoryDisplayPlural;
+      if (
+        typeof maxAgeYears === "number" &&
+        Number.isFinite(maxAgeYears) &&
+        typeof categoryDisplayPlural === "string"
+      ) {
+        setEstimateResult({
+          kind: "too_old",
+          maxAgeYears,
+          categoryDisplayPlural,
+        });
+        setConciergeFlow("idle");
+        setCapturedLead(null);
+        setFlowPhase("result");
+        return;
+      }
+    }
+
     const msg =
       typeof (data as { message?: string }).message === "string"
         ? (data as { message: string }).message
@@ -570,6 +667,30 @@ export function EstimationForm() {
           typeof resaleRaw === "number" && Number.isFinite(resaleRaw)
             ? Math.round(resaleRaw)
             : undefined;
+        const pickedImg =
+          typeof d.pickedImageUrl === "string" && d.pickedImageUrl.trim()
+            ? d.pickedImageUrl.trim()
+            : typeof d.picked_image_url === "string" && d.picked_image_url.trim()
+              ? d.picked_image_url.trim()
+              : undefined;
+        const marketPricingNote =
+          typeof d.marketPricingNote === "string" && d.marketPricingNote.trim()
+            ? d.marketPricingNote.trim()
+            : undefined;
+        const forcedCondition =
+          d.forcedCondition === "ancien-modele"
+            ? ("ancien-modele" as const)
+            : undefined;
+        const consistencyWarningRaw =
+          d.consistencyWarning ?? d.consistency_warning;
+        const consistencyWarning =
+          typeof consistencyWarningRaw === "string" &&
+          consistencyWarningRaw.trim()
+            ? consistencyWarningRaw.trim()
+            : undefined;
+        const needsManualVerification =
+          d.needsManualVerification === true ||
+          d.needs_manual_verification === true;
         setEstimateResult({
           kind: "offer",
           offer,
@@ -588,25 +709,41 @@ export function EstimationForm() {
               : typeof d.confidence_score === "number" &&
                   Number.isFinite(d.confidence_score)
                 ? d.confidence_score
-              : undefined,
+                : undefined,
           sourcesFound:
             typeof d.sourcesFound === "number" &&
             Number.isFinite(d.sourcesFound)
               ? d.sourcesFound
               : undefined,
+          ...(pickedImg ? { pickedImageUrl: pickedImg } : {}),
+          ...(marketPricingNote ? { marketPricingNote } : {}),
+          ...(forcedCondition ? { forcedCondition } : {}),
+          ...(consistencyWarning ? { consistencyWarning } : {}),
+          ...(needsManualVerification ? { needsManualVerification } : {}),
         });
+        setConciergeFlow("idle");
+        setCapturedLead(null);
         setFlowPhase("result");
         return;
       }
     }
 
     if (!success && fallback && typeof msg === "string") {
-      setEstimateResult({ kind: "fallback", message: msg });
+      setConciergeFlow("idle");
+      setCapturedLead(null);
+      const d = data as { visualFallback?: unknown };
+      setEstimateResult({
+        kind: "fallback",
+        message: msg,
+        visualFallback: d.visualFallback === true,
+      });
       setFlowPhase("result");
       return;
     }
 
     setSubmitError(msg ?? "Réponse invalide.");
+    setConciergeFlow("idle");
+    setCapturedLead(null);
     setFlowPhase("form");
   }, []);
 
@@ -626,14 +763,21 @@ export function EstimationForm() {
 
   React.useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (!brandBoxRef.current?.contains(e.target as Node)) setBrandOpen(false);
+      const t = e.target as Node;
+      if (step === 2 && !brandPanelRef.current?.contains(t)) {
+        setBrandOpen(false);
+      }
+      if (step === 3 && !modelPanelRef.current?.contains(t)) {
+        setModelOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+  }, [step]);
 
   React.useEffect(() => {
     if (step !== 2) setBrandOpen(false);
+    if (step !== 3) setModelOpen(false);
   }, [step]);
 
   React.useEffect(() => {
@@ -656,12 +800,13 @@ export function EstimationForm() {
   }, [flowPhase, step]);
 
   React.useEffect(() => {
-    if (flowPhase !== "form" || step !== 3 || !manualEntry) return;
+    if (flowPhase !== "form" || step !== 3) return;
+    setModelOpen(true);
     const id = window.requestAnimationFrame(() => {
       modelInputRef.current?.focus();
     });
     return () => window.cancelAnimationFrame(id);
-  }, [flowPhase, step, manualEntry]);
+  }, [flowPhase, step]);
 
   React.useEffect(() => {
     if (step !== 2 || !equipment || flowPhase !== "form") return;
@@ -686,20 +831,14 @@ export function EstimationForm() {
   }, [step, equipment, flowPhase]);
 
   React.useEffect(() => {
-    if (
-      step !== 3 ||
-      !equipment ||
-      manualEntry ||
-      !resolvedBrandLabel ||
-      flowPhase !== "form"
-    )
+    if (step !== 3 || !equipment || !brand.trim() || flowPhase !== "form")
       return;
     let cancelled = false;
     setModelsLoading(true);
     setCatalogModels([]);
     const q = new URLSearchParams({
       category: equipment,
-      brand: resolvedBrandLabel,
+      brand: brand.trim(),
     });
     fetch(`/api/catalog/models?${q}`)
       .then((r) => r.json())
@@ -716,13 +855,7 @@ export function EstimationForm() {
     return () => {
       cancelled = true;
     };
-  }, [
-    step,
-    equipment,
-    manualEntry,
-    resolvedBrandLabel,
-    flowPhase,
-  ]);
+  }, [step, equipment, brand, flowPhase]);
 
   React.useEffect(() => {
     if (flowPhase !== "analyzing") {
@@ -733,8 +866,8 @@ export function EstimationForm() {
       `${brand.trim()} ${model.trim()}`.trim() || "équipement";
     const lines = [
       `Analyse de votre ${product}…`,
-      "Synchronisation avec le marché européen…",
-      "Calcul de votre offre personnalisée…",
+      "Croisement avec le marché européen…",
+      "Établissement de votre fourchette de transmission…",
     ];
     setReassuranceLines([]);
     const tids = lines.map((line, i) =>
@@ -777,7 +910,12 @@ export function EstimationForm() {
       setDir(-1);
       if (from === 3) {
         setCatalogSlug(null);
-        setManualEntry(false);
+        setCatalogModelSelecting(null);
+        setModel("");
+        setDeclinaison("");
+      }
+      if (from === 4) {
+        setCatalogSlug(null);
         setCatalogModelSelecting(null);
       }
       setStep(Math.max(1, from - 1));
@@ -788,24 +926,20 @@ export function EstimationForm() {
   const lowValue = isLowValueEquipment(equipment);
 
   const securityStepValid =
-    lowValue || (securityChecks[0] && securityChecks[1] && securityChecks[2]);
+    lowValue ||
+    (securityChecks[0] &&
+      securityChecks[1] &&
+      securityChecks[2] &&
+      (equipment !== "casque" || securityChecks[3]));
 
   const canGoNext = React.useMemo(() => {
     if (step === 1) return equipment !== null;
-    if (step === 2) {
-      if (!brand.trim()) return false;
-      if (distinctBrands.length === 0) return true;
-      return distinctBrands.some(
-        (b) => b.toLowerCase() === brand.trim().toLowerCase()
-      );
-    }
-    if (step === 3) {
-      if (manualEntry) return brand.trim() !== "" && model.trim() !== "";
-      return catalogSlug != null && catalogSlug.length > 0;
-    }
+    if (step === 2) return brand.trim() !== "";
+    if (step === 3) return model.trim() !== "";
     if (step === 4) return condition !== null && equipment !== null;
     if (step === 5) {
       if (!equipment) return false;
+      if (purchaseYear == null) return false;
       if (equipment === "casque") {
         if (!helmetAgeBand || hadImpact === null) return false;
         if (hadImpact === true) return false;
@@ -826,12 +960,10 @@ export function EstimationForm() {
     model,
     condition,
     securityStepValid,
-    distinctBrands,
-    manualEntry,
-    catalogSlug,
     helmetAgeBand,
     hadImpact,
     equipmentSize,
+    purchaseYear,
   ]);
 
   const canSubmitEstimation =
@@ -839,49 +971,50 @@ export function EstimationForm() {
     securityStepValid &&
     equipment !== null &&
     condition !== null &&
+    purchaseYear != null &&
     (Boolean(catalogSlug?.length) ||
       (brand.trim().length > 0 && model.trim().length > 0));
 
   const tryAdvance = () => {
     setStepHint(null);
     if (step === 1 && !canGoNext) {
-      setStepHint("Choisissez un type.");
+      setStepHint("Indiquez une catégorie d’équipement.");
       return;
     }
     if (step === 2 && !canGoNext) {
-      setStepHint(
-        distinctBrands.length
-          ? "Choisissez une marque proposée dans la liste."
-          : "Indiquez la marque de votre équipement."
-      );
+      setStepHint("Indiquez une marque (ou choisissez-la dans la liste).");
       return;
     }
     if (step === 3 && !canGoNext) {
-      setStepHint(
-        manualEntry
-          ? "Indiquez la marque et le modèle (ex. Shoei NXR2)."
-          : "Sélectionnez un modèle ou passez en saisie manuelle."
-      );
+      setStepHint("Indiquez un modèle ou choisissez une fiche catalogue.");
       return;
     }
     if (step === 4 && !canGoNext) {
-      setStepHint("Choisissez l’état général.");
+      setStepHint("Indiquez le niveau de patine le plus proche de la réalité.");
       return;
     }
     if (step === 5 && !canGoNext) {
+      if (purchaseYear == null) {
+        setStepHint("Indiquez l’année d’achat de l’équipement.");
+        return;
+      }
       if (equipment === "casque" && hadImpact === true) {
         setStepHint(
-          "Un casque ayant subi un choc n’est pas éligible en ligne — contactez-nous pour une expertise."
+          "Un casque ayant subi un choc n’est pas traitable en ligne — écrivez-nous pour une relecture experte."
         );
         return;
       }
       setStepHint(
-        "Complétez les informations manquantes (âge casque, taille…)."
+        "Complétez les champs requis (âge du casque, taille des gants ou bottes…)."
       );
       return;
     }
     if (step === 6 && !canGoNext) {
-      setStepHint("Cochez les trois affirmations pour continuer.");
+      setStepHint(
+        equipment === "casque" && !securityChecks[3]
+          ? "Cochez la certification sur l’intégrité du casque et l’origine des coques."
+          : "Validez tous les engagements pour poursuivre."
+      );
       return;
     }
     stepForward(step);
@@ -893,20 +1026,21 @@ export function EstimationForm() {
     setEquipSelecting(id);
     setStepHint(null);
     setCatalogSlug(null);
-    setManualEntry(false);
     setDistinctBrands([]);
     setCatalogModels([]);
     setBrand("");
     setModel("");
+    setDeclinaison("");
     equipAdvanceTimerRef.current = window.setTimeout(() => {
       equipAdvanceTimerRef.current = null;
       setEquipSelecting(null);
       setDir(1);
       setStep(2);
-      setSecurityChecks([false, false, false]);
+      setSecurityChecks([false, false, false, false]);
       setHelmetAgeBand(null);
       setHadImpact(null);
       setEquipmentSize("");
+      setPurchaseYear(null);
       setCompleteness("complete");
     }, SELECTION_FEEDBACK_MS);
   };
@@ -926,8 +1060,8 @@ export function EstimationForm() {
     if (modelPickTimerRef.current != null) return;
     setCatalogSlug(row.canonical_slug);
     setModel(row.model);
-    setManualEntry(false);
     setBrandOpen(false);
+    setModelOpen(false);
     setStepHint(null);
     setCatalogModelSelecting(row.canonical_slug);
     modelPickTimerRef.current = window.setTimeout(() => {
@@ -938,20 +1072,16 @@ export function EstimationForm() {
     }, SELECTION_FEEDBACK_MS);
   };
 
-  const startManualModelEntry = () => {
-    setManualEntry(true);
-    setCatalogSlug(null);
-    setModel("");
-    setBrandOpen(false);
-    setStepHint(null);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmitEstimation || !equipment || !condition) return;
 
-    const useCatalog =
-      Boolean(catalogSlug?.trim()) && catalogSlug != null && !manualEntry;
+    const useCatalog = Boolean(catalogSlug?.trim()) && catalogSlug != null;
+
+    if (purchaseYear == null) {
+      setSubmitError("Indiquez l’année d’achat.");
+      return;
+    }
 
     const detailPayload = {
       completeness,
@@ -966,12 +1096,19 @@ export function EstimationForm() {
         : {}),
     };
 
+    const integrityField =
+      equipment === "casque"
+        ? { physicalIntegrityCertified: securityChecks[3] }
+        : {};
+
     const payload = useCatalog
       ? {
           canonical_slug: catalogSlug.trim(),
           category: equipment,
           condition,
+          purchaseYear,
           ...detailPayload,
+          ...integrityField,
           ...(declinaison.trim() ? { declinaison: declinaison.trim() } : {}),
         }
       : {
@@ -979,8 +1116,11 @@ export function EstimationForm() {
           model: model.trim(),
           category: equipment,
           condition,
+          purchaseYear,
           ...detailPayload,
+          ...integrityField,
           ...(declinaison.trim() ? { declinaison: declinaison.trim() } : {}),
+          ...(!useCatalog ? { forceVisualFallback: true as const } : {}),
         };
     const validated = estimateRequestSchema.safeParse(payload);
     if (!validated.success) {
@@ -1031,7 +1171,7 @@ export function EstimationForm() {
           return;
         }
         setApiStreamLog((prev) =>
-          prev.includes("Terminé") ? prev : [...prev, "Terminé"]
+          prev.includes("Analyse terminée") ? prev : [...prev, "Analyse terminée"]
         );
         await waitMin();
         pendingResultRef.current = data;
@@ -1103,7 +1243,7 @@ export function EstimationForm() {
       }
 
       setApiStreamLog((prev) =>
-        prev.includes("Terminé") ? prev : [...prev, "Terminé"]
+        prev.includes("Analyse terminée") ? prev : [...prev, "Analyse terminée"]
       );
       await waitMin();
       pendingResultRef.current = resultPayload.body;
@@ -1128,7 +1268,7 @@ export function EstimationForm() {
     setModel("");
     setDeclinaison("");
     setCondition(null);
-    setSecurityChecks([false, false, false]);
+    setSecurityChecks([false, false, false, false]);
     setFlowPhase("form");
     setEstimateResult(null);
     setSubmitError(null);
@@ -1138,15 +1278,20 @@ export function EstimationForm() {
     setAnalysisExiting(false);
     pendingResultRef.current = null;
     setCatalogSlug(null);
-    setManualEntry(false);
     setDistinctBrands([]);
     setCatalogModels([]);
     setBrandOpen(false);
+    setModelOpen(false);
     setCatalogModelSelecting(null);
     setHelmetAgeBand(null);
     setHadImpact(null);
     setEquipmentSize("");
     setCompleteness("complete");
+    setPurchaseYear(null);
+    setConciergeFlow("idle");
+    setCapturedLead(null);
+    setLeadPipelineSubmitting(false);
+    setVisualFallbackBusy(false);
   };
 
   const equipmentLabel = equipment ? EQUIPMENT_LABELS[equipment] : "";
@@ -1161,9 +1306,10 @@ export function EstimationForm() {
 
   const renderResultOffer = () => {
     if (estimateResult?.kind !== "offer") return null;
+    if (!equipment || !condition) return null;
     const {
-      offer,
       estimatedResaleEur,
+      offer: engineOffer,
       match,
       needsReview,
       confidenceScore,
@@ -1172,27 +1318,44 @@ export function EstimationForm() {
       sourcesFound,
       retailerSource,
       isOfficialFeed,
+      pickedImageUrl,
+      marketPricingNote,
+      forcedCondition,
+      consistencyWarning,
+      needsManualVerification,
     } = estimateResult;
 
-    const emailBody = [
-      `Prix de rachat proposé : ${offer} € (montant versé, frais et marge revente déjà pris en compte).`,
-      ...(typeof estimatedResaleEur === "number" && estimatedResaleEur > 0
-        ? [
-            `Revente occasion indicative (marché) : env. ${estimatedResaleEur} €`,
-          ]
-        : []),
-      `${match.brand} ${match.model}`,
-      `Réf. neuf ${match.retailPrice} €`,
-      `${equipmentLabel} · ${conditionLabel}`,
-    ].join("\n");
-    const offerEmailHref = `mailto:contact@le-coin-moto.fr?subject=${encodeURIComponent(
-      `Rachat proposé — ${offer} €`
-    )}&body=${encodeURIComponent(emailBody)}`;
+    const displayedConditionLabel =
+      forcedCondition === "ancien-modele"
+        ? "Ancien modèle (réf. marché)"
+        : conditionLabel;
 
-    const recapImageUrl = catalogSlug
-      ? (catalogModels.find((r) => r.canonical_slug === catalogSlug)
-          ?.image_url ?? null)
-      : null;
+    const resaleDisplay =
+      typeof estimatedResaleEur === "number" && estimatedResaleEur > 0
+        ? estimatedResaleEur
+        : null;
+
+    const coteArgusDisplay =
+      resaleDisplay ??
+      (typeof engineOffer === "number" &&
+      Number.isFinite(engineOffer) &&
+      engineOffer > 0
+        ? Math.round(engineOffer)
+        : null);
+
+    const marketRange = deriveMarketRange(estimatedResaleEur, engineOffer);
+
+    const annoncesMention =
+      typeof sourcesFound === "number" && sourcesFound > 0
+        ? `À partir de ${sourcesFound} cession${sourcesFound > 1 ? "s" : ""} récente${sourcesFound > 1 ? "s" : ""} de matériel comparable.`
+        : "À partir de cessions comparables récemment observées sur le marché.";
+
+    const recapImageUrl =
+      pickedImageUrl ??
+      (catalogSlug
+        ? (catalogModels.find((r) => r.canonical_slug === catalogSlug)
+            ?.image_url ?? null)
+        : null);
     const EquipIcon = equipment
       ? (equipmentOptions.find((e) => e.id === equipment)?.icon ?? HelmetIcon)
       : HelmetIcon;
@@ -1208,180 +1371,7 @@ export function EstimationForm() {
       maximumFractionDigits: 0,
     }).format(match.retailPrice);
 
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={springTransition}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"
-      >
-        <div
-          className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-10 px-5 pb-8 pt-6 sm:gap-12 sm:pb-10 sm:pt-8 lg:grid-cols-12 lg:items-start lg:gap-14"
-          style={{
-            paddingBottom: `max(2rem, env(safe-area-inset-bottom), ${keyboardPad}px)`,
-          }}
-        >
-          {/* Colonne estimation */}
-          <div className="flex flex-col lg:col-span-7">
-            <div className="flex flex-col gap-4 text-center lg:max-w-xl lg:text-left">
-              <p className={cn(uiOverline, "text-slate-500")}>Estimation terminée</p>
-              <h2 className={cn(uiHeadingSection)}>Prix de rachat proposé</h2>
-              <p className={cn(uiBody, "sm:text-[17px]")}>
-                Montant que nous vous versons pour cet article, dans l’état
-                indiqué. Il inclut nos frais de contrôle et de logistique, ainsi
-                que la marge nécessaire pour une revente sereine — un équilibre
-                juste pour vous comme pour nous.
-              </p>
-              <p className={cn(uiBodySm, "leading-snug")}>
-                Indicatif, valable 7 jours. Paiement sous 48 h après réception et
-                vérification.
-              </p>
-            </div>
-
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
-              {certifiedArgusMoto && (
-                <span
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em]",
-                    "border border-emerald-200/90 bg-gradient-to-r from-emerald-50 to-amber-50/80 text-emerald-900 shadow-sm"
-                  )}
-                >
-                  Certifié Argus
-                </span>
-              )}
-            </div>
-
-            <div className="mt-6 flex flex-col items-center lg:items-start">
-              <p
-                className="text-7xl font-bold tracking-tight text-slate-900 tabular-nums sm:text-8xl lg:text-[7.5rem] lg:leading-[0.95]"
-                aria-label={`Montant que nous vous versons : ${offer} euros`}
-              >
-                {offer}
-                <span className="text-3xl font-semibold text-slate-300 sm:text-4xl lg:text-5xl">
-                  {" "}
-                  €
-                </span>
-              </p>
-              <p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
-                versés à vous · tout compris
-              </p>
-            </div>
-
-            {typeof estimatedResaleEur === "number" && estimatedResaleEur > 0 ? (
-              <div
-                className={cn(
-                  uiCard,
-                  uiCardLift,
-                  "mx-auto mt-8 w-full max-w-md border-emerald-200/80",
-                  "bg-gradient-to-br from-emerald-50/95 via-white to-emerald-50/40",
-                  "px-5 py-5 text-center lg:mx-0 lg:text-left"
-                )}
-              >
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-800/75">
-                  Revente occasion — ordre de grandeur
-                </p>
-                <p className="mt-2 text-4xl font-semibold tabular-nums tracking-tight text-emerald-950 sm:text-5xl">
-                  ~{estimatedResaleEur}
-                  <span className="text-2xl font-medium text-emerald-700/55 sm:text-3xl">
-                    {" "}
-                    €
-                  </span>
-                </p>
-                <p className="mt-1 text-xs font-medium text-emerald-800/70">
-                  indicatif marché
-                </p>
-                <p className="mt-3 text-sm leading-relaxed text-emerald-950/85">
-                  C’est le niveau de prix auquel nous pouvons typiquement
-                  repositionner un équivalent sur l’occasion après la reprise —
-                  avant négociation avec le prochain acheteur. Cela explique
-                  l’écart avec le montant que nous vous payons aujourd’hui.
-                </p>
-              </div>
-            ) : null}
-
-            <p className="mx-auto mt-6 max-w-md text-center text-sm leading-relaxed text-slate-500 lg:mx-0 lg:text-left">
-              Basé sur une référence neuf à{" "}
-              <span className="font-medium text-slate-700">{retailFmt}</span>.
-              Nos frais (dont env. {LOGISTICS_FIXED_EUR} € logistique et
-              traitement) sont déjà déduits de ce montant.
-            </p>
-
-            <div className="mx-auto mt-6 flex w-full max-w-md flex-col gap-2.5 lg:mx-0">
-              {isOfficialFeed && (
-                <p
-                  className={cn(
-                    uiCard,
-                    "border-slate-200 bg-slate-50/90 px-4 py-3 text-xs leading-relaxed tracking-wide text-slate-800"
-                  )}
-                >
-                  Cote {retailerSource ?? "Data Lake"} ·{" "}
-                  {Math.max(1, sourcesFound ?? 1)} sources
-                </p>
-              )}
-              {pricingSource === "argus_predictif" && (
-                <p
-                  className={cn(
-                    uiCard,
-                    "border-slate-200 bg-slate-50/90 px-4 py-3 text-xs tracking-wide text-slate-800"
-                  )}
-                >
-                  Estimation prédictive (marché live indisponible)
-                </p>
-              )}
-              {needsReview && (
-                <p className="rounded-3xl border border-amber-200/90 bg-amber-50/90 px-4 py-3 text-xs tracking-wide text-amber-950 shadow-sm">
-                  Reprise à confirmer
-                  {typeof confidenceScore === "number"
-                    ? ` · ${Math.round(confidenceScore)} %`
-                    : ""}
-                </p>
-              )}
-              {typeof confidenceScore === "number" && confidenceScore < 70 && (
-                <p className={cn(uiCard, "bg-slate-50 px-4 py-3 text-xs tracking-wide text-slate-700")}>
-                  Échantillon restreint — validation manuelle recommandée
-                </p>
-              )}
-            </div>
-
-            <p className="mx-auto mt-6 text-center text-xs leading-relaxed text-slate-400 lg:mx-0 lg:text-left">
-              Satisfait ou retour gratuit de votre équipement.
-            </p>
-
-            <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-4 lg:mx-0">
-              <a
-                href={offerEmailHref}
-                className={cn(
-                  uiBtnPrimaryBar,
-                  "relative group w-full overflow-hidden py-0 text-[15px] tracking-wide no-underline hover:text-white"
-                )}
-              >
-                <span
-                  className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent opacity-0 transition duration-700 ease-out group-hover:translate-x-full group-hover:opacity-100"
-                  aria-hidden
-                />
-                <span className="relative z-[1]">
-                  Demander ce rachat à {offer} €
-                </span>
-              </a>
-              <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start lg:gap-6">
-                <a
-                  href={offerEmailHref}
-                  className="text-sm font-medium text-slate-900 underline decoration-slate-400 underline-offset-4 transition hover:decoration-slate-900"
-                >
-                  Ouvrir l’e-mail
-                </a>
-                <button
-                  type="button"
-                  onClick={reset}
-                  className="text-sm font-semibold tracking-wide text-slate-500 underline decoration-slate-300/80 underline-offset-4 transition hover:text-emerald-800 hover:decoration-emerald-400/80"
-                >
-                  Nouvelle estimation
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Carte rappel produit */}
+    const aside = (
           <aside className="lg:col-span-5">
             <div
               className={cn(
@@ -1399,10 +1389,14 @@ export function EstimationForm() {
                     weight="regular"
                     aria-hidden
                   />
-                  <span className={cn(uiOverline, "text-slate-500")}>Votre article</span>
+                  <span className={cn(uiOverline, "text-slate-500")}>Votre équipement</span>
                 </div>
 
-                <div className="relative mx-auto mt-5 aspect-[4/3] w-full max-w-[280px] overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-100 sm:max-w-none">
+                <p className="mt-4 text-center text-sm font-semibold leading-snug text-slate-800 sm:text-[15px]">
+                  Voici notre offre pour votre modèle&nbsp;: {match.model}
+                </p>
+
+                <div className="relative mx-auto mt-4 aspect-[4/3] w-full max-w-[280px] overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-100 sm:max-w-none">
                   {recapImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -1443,8 +1437,8 @@ export function EstimationForm() {
 
                 <div className="mt-6 space-y-0 border-t border-slate-200/80 pt-5">
                   {[
-                    ["État déclaré", conditionLabel],
-                    ["Colis", completenessLabel],
+                    ["Patine déclarée", displayedConditionLabel],
+                    ["Contenu du lot", completenessLabel],
                     equipmentSize.trim()
                       ? ["Taille / pointure", equipmentSize.trim()]
                       : null,
@@ -1478,29 +1472,373 @@ export function EstimationForm() {
                   </p>
                 </div>
 
-                {typeof estimatedResaleEur === "number" &&
-                estimatedResaleEur > 0 ? (
+                {marketRange ? (
                   <div className="mt-3 rounded-3xl border border-emerald-200/90 bg-emerald-50/60 px-4 py-3 text-center shadow-sm">
                     <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-800/65">
-                      Revente occasion (indicatif)
+                      Valeur estimée sur le marché
                     </p>
                     <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-950">
-                      ~{estimatedResaleEur} €
+                      {marketRange.lowEur} € — {marketRange.highEur} €
                     </p>
                   </div>
                 ) : null}
               </div>
             </div>
           </aside>
+    );
+
+    const metadataPayload = {
+      brand: match.brand,
+      model: match.model,
+      category: equipment,
+      conditionLabel: displayedConditionLabel,
+      catalogSlug: catalogSlug ?? null,
+      retailReferenceEur: Math.round(match.retailPrice),
+      completeness: completenessLabel,
+      equipmentSize: equipmentSize.trim() || undefined,
+      helmetAgeBand: helmetAgeBand ?? undefined,
+      hadImpact:
+        equipment === "casque" && hadImpact !== null ? hadImpact : undefined,
+      declinaison: declinaison.trim() || undefined,
+      certifiedArgus: certifiedArgusMoto,
+      coteArgusEur: marketRange?.highEur ?? coteArgusDisplay,
+      offerEngineEur: marketRange?.lowEur ?? Math.round(engineOffer),
+      snapshot: {
+        pricingSource,
+        sourcesFound,
+        ficheCatalogueSlug: catalogSlug ?? null,
+        horsFicheCatalogue: catalogSlug == null,
+        completenessId: completeness,
+        conditionId: condition,
+        equipment,
+        marketRangeLowEur: marketRange?.lowEur,
+        marketRangeHighEur: marketRange?.highEur,
+      },
+    };
+
+    const submitSellerLead = async (photos: Partial<Record<PhotoSlotId, File>>, pilotStory: string) => {
+      if (!capturedLead) throw new Error("Session expirée : recommencez depuis l’étape contact.");
+      const fd = new FormData();
+      fd.append("first_name", capturedLead.firstName);
+      fd.append("email", capturedLead.email);
+      fd.append("phone", capturedLead.phone);
+      fd.append("pilot_story", pilotStory);
+      fd.append("metadata", JSON.stringify(metadataPayload));
+      for (const slot of ["face", "back", "label", "wear"] as PhotoSlotId[]) {
+        const f = photos[slot];
+        if (f) fd.append(`photo_${slot}`, f);
+      }
+      const res = await fetch("/api/seller-leads", { method: "POST", body: fd });
+      const json = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok) {
+        throw new Error(typeof json.message === "string" ? json.message : "Échec envoi");
+      }
+    };
+
+    return (
+      <>
+        <ResultScreen
+          keyboardPad={keyboardPad}
+          marketRange={marketRange}
+          certifiedArgusMoto={certifiedArgusMoto}
+          annoncesMention={annoncesMention}
+          retailFmt={retailFmt}
+          isOfficialFeed={isOfficialFeed}
+          retailerSource={retailerSource}
+          sourcesFound={sourcesFound}
+          pricingSource={pricingSource}
+          marketPricingNote={marketPricingNote}
+          consistencyWarning={consistencyWarning}
+          needsManualVerification={needsManualVerification}
+          helmetOfferDisclaimer={equipment === "casque"}
+          needsReview={needsReview}
+          confidenceScore={confidenceScore}
+          onArgusExpress={() => setConciergeFlow("lead")}
+          onPreferSellMyself={() => {
+            reset();
+            router.push("/");
+          }}
+          onRestartEstimate={reset}
+          aside={aside}
+          hidden={conciergeFlow !== "idle"}
+        />
+        <AnimatePresence mode="wait">
+          {conciergeFlow === "lead" ? (
+            <LeadCaptureStep
+              key="lead"
+              onBack={() => setConciergeFlow("idle")}
+              onContinue={(lead) => {
+                setCapturedLead(lead);
+                setConciergeFlow("photos");
+              }}
+            />
+          ) : null}
+          {conciergeFlow === "photos" && capturedLead ? (
+            <PhotoUploadStep
+              key="photos"
+              onBack={() => setConciergeFlow("lead")}
+              isSubmitting={leadPipelineSubmitting}
+              onSubmit={async ({ photos, pilotStory }) => {
+                setLeadPipelineSubmitting(true);
+                try {
+                  await submitSellerLead(photos, pilotStory);
+                  setConciergeFlow("success");
+                } finally {
+                  setLeadPipelineSubmitting(false);
+                }
+              }}
+            />
+          ) : null}
+          {conciergeFlow === "success" ? <SuccessScreen key="success" /> : null}
+        </AnimatePresence>
+      </>
+    );
+  };
+
+  const renderResultTooOld = () => {
+    if (estimateResult?.kind !== "too_old") return null;
+    if (!equipment || !condition) return null;
+
+    const { maxAgeYears, categoryDisplayPlural } = estimateResult;
+
+    const EquipIconToo = equipment
+      ? (equipmentOptions.find((e) => e.id === equipment)?.icon ?? HelmetIcon)
+      : HelmetIcon;
+    const completenessLabelToo =
+      COMPLETENESS_OPTIONS.find((o) => o.id === completeness)?.label ?? "";
+    const helmetAgeLabelToo =
+      equipment === "casque" && helmetAgeBand
+        ? HELMET_AGE_OPTIONS.find((o) => o.id === helmetAgeBand)?.label
+        : null;
+
+    const recapImageUrlToo =
+      catalogSlug != null
+        ? (catalogModels.find((r) => r.canonical_slug === catalogSlug)
+            ?.image_url ?? null)
+        : null;
+
+    const modelDisplayToo = [model.trim(), declinaison.trim()]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    const asideTooOld = (
+      <aside className="lg:col-span-5">
+        <div
+          className={cn(
+            uiCard,
+            uiCardLift,
+            "relative overflow-hidden bg-gradient-to-b from-white via-slate-50/40 to-white",
+            "lg:sticky lg:top-6"
+          )}
+        >
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-300/60 to-transparent" />
+          <div className="p-6 sm:p-7">
+            <div className="flex items-center gap-2 text-slate-500">
+              <Package
+                className="size-4 shrink-0 opacity-70"
+                weight="regular"
+                aria-hidden
+              />
+              <span className={cn(uiOverline, "text-slate-500")}>
+                Votre équipement
+              </span>
+            </div>
+
+            <p className="mt-4 text-center text-sm font-semibold leading-snug text-slate-800 sm:text-[15px]">
+              Récapitulatif — pas d&apos;offre de rachat en ligne
+            </p>
+
+            <div className="relative mx-auto mt-4 aspect-[4/3] w-full max-w-[280px] overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-100 sm:max-w-none">
+              {recapImageUrlToo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={recapImageUrlToo}
+                  alt=""
+                  className="size-full object-contain mix-blend-multiply"
+                />
+              ) : (
+                <div className="flex size-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200/60">
+                  <EquipIconToo
+                    className="size-20 text-slate-400 sm:size-24"
+                    aria-hidden
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 space-y-1 text-center sm:mt-7">
+              <p className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200/90 bg-white/80 px-3 py-1 text-[11px] font-medium text-slate-600">
+                <EquipIconToo className="size-4 shrink-0 sm:size-[1.15rem]" />
+                {equipmentLabel}
+              </p>
+              <h3 className={cn("mt-3 leading-tight", uiHeadingSub)}>
+                {resolvedBrandLabel}
+              </h3>
+              <p className="text-base font-medium text-slate-600 sm:text-lg">
+                {modelDisplayToo || "—"}
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-0 border-t border-slate-200/80 pt-5">
+              {(
+                [
+                  ["Patine déclarée", conditionLabel],
+                  ["Contenu du lot", completenessLabelToo],
+                  purchaseYear != null
+                    ? ["Année d’achat", String(purchaseYear)]
+                    : null,
+                  equipmentSize.trim()
+                    ? ["Taille / pointure", equipmentSize.trim()]
+                    : null,
+                  helmetAgeLabelToo
+                    ? ["Âge du casque (tranche)", helmetAgeLabelToo]
+                    : null,
+                ] as Array<[string, string] | null>
+              )
+                .filter(Boolean)
+                .map((row, i) => {
+                  const [k, v] = row as [string, string];
+                  return (
+                    <div
+                      key={`too-old-${k}-${i}`}
+                      className="flex justify-between gap-4 border-b border-slate-100/90 py-2.5 text-sm last:border-b-0"
+                    >
+                      <span className="shrink-0 text-slate-400">{k}</span>
+                      <span className="text-right font-medium text-slate-800">
+                        {v}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
         </div>
-      </motion.div>
+      </aside>
+    );
+
+    return (
+      <ResultTooOldScreen
+        keyboardPad={keyboardPad}
+        categoryDisplayPlural={categoryDisplayPlural}
+        maxAgeYears={maxAgeYears}
+        onRestartEstimate={reset}
+        aside={asideTooOld}
+      />
     );
   };
 
   const renderResultFallback = () => {
     if (estimateResult?.kind !== "fallback") return null;
-    const expertiseBody = `Cat : ${equipmentLabel}\nRéf : ${[brand, model, declinaison].filter(Boolean).join(" ")}\nÉtat : ${conditionLabel}`;
-    const expertiseHref = `mailto:expertise@le-coin-moto.fr?subject=${encodeURIComponent("Expertise")}&body=${encodeURIComponent(expertiseBody)}`;
+
+    const showVisualFallback =
+      estimateResult.visualFallback === true &&
+      Boolean(equipment && condition) &&
+      brand.trim().length > 0 &&
+      model.trim().length > 0;
+
+    if (showVisualFallback && equipment) {
+      const modelLine = [model.trim(), declinaison.trim()]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      return (
+        <VisualFallbackStep
+          equipmentId={equipment}
+          marque={resolvedBrandLabel}
+          modele={modelLine}
+          keyboardPad={keyboardPad}
+          purchaseYear={purchaseYear}
+          isSubmitting={visualFallbackBusy}
+          onCalculate={async ({
+            prixNeufEur,
+            pickedImageUrl: visuelUrl,
+            serperMarketPriceEur,
+            pickedImageTitle,
+          }) => {
+            if (!equipment || !condition) return;
+            if (purchaseYear == null) {
+              setSubmitError(
+                "Année d’achat manquante : revenez à l’étape « Détails » pour la renseigner."
+              );
+              return;
+            }
+            setVisualFallbackBusy(true);
+            setSubmitError(null);
+            try {
+              const detailPayload = {
+                completeness,
+                ...(equipment === "casque" && helmetAgeBand && hadImpact !== null
+                  ? {
+                      helmetAgeBand,
+                      hadImpact: hadImpact === true,
+                    }
+                  : {}),
+                ...(equipmentSize.trim()
+                  ? { equipmentSize: equipmentSize.trim() }
+                  : {}),
+              };
+              const payload = {
+                brand: brand.trim(),
+                model: model.trim(),
+                category: equipment,
+                condition,
+                purchaseYear: purchaseYear!,
+                manualRetailEur: prixNeufEur,
+                ...detailPayload,
+                ...(equipment === "casque"
+                  ? { physicalIntegrityCertified: securityChecks[3] }
+                  : {}),
+                ...(declinaison.trim()
+                  ? { declinaison: declinaison.trim() }
+                  : {}),
+                ...(visuelUrl?.trim()
+                  ? { pickedUrl: visuelUrl.trim() }
+                  : {}),
+                ...(serperMarketPriceEur != null
+                  ? { serperMarketPriceEur }
+                  : {}),
+                ...(pickedImageTitle.trim()
+                  ? { pickedImageTitle: pickedImageTitle.trim() }
+                  : {}),
+              };
+              const validated = estimateRequestSchema.safeParse(payload);
+              if (!validated.success) {
+                const flat = validated.error.flatten();
+                setSubmitError(
+                  flat.formErrors[0] ??
+                    Object.values(flat.fieldErrors).flat()[0] ??
+                    "Données invalides."
+                );
+                return;
+              }
+              const res = await fetch("/api/estimate", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify(payload),
+              });
+              const data: unknown = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                const msg =
+                  typeof (data as { message?: string }).message === "string"
+                    ? (data as { message: string }).message
+                    : "Échec du calcul.";
+                setSubmitError(msg);
+                return;
+              }
+              commitEstimateResult(data);
+            } finally {
+              setVisualFallbackBusy(false);
+            }
+          }}
+        />
+      );
+    }
+
     return (
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -1508,9 +1846,13 @@ export function EstimationForm() {
         transition={springTransition}
         className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-6 pb-8 text-center"
       >
-        <h2 className={cn(uiHeadingCard)}>Hors automate</h2>
+        <h2 className={cn(uiHeadingCard)}>Hors parcours en ligne</h2>
         <p className={cn("mt-3 max-w-md", uiBodySm)}>
           {estimateResult.message}
+        </p>
+        <p className={cn("mt-4 max-w-md text-sm text-slate-500", uiBodySm)}>
+          L&apos;atelier peut reprendre ce dossier manuellement. Retournez à
+          l&apos;accueil ou affinez votre saisie.
         </p>
         <div
           className="mt-8 flex w-full max-w-xs flex-col gap-3"
@@ -1518,15 +1860,15 @@ export function EstimationForm() {
             paddingBottom: `max(0.75rem, env(safe-area-inset-bottom), ${keyboardPad}px)`,
           }}
         >
-          <a
-            href={expertiseHref}
+          <Link
+            href="/"
             className={cn(
               uiBtnPrimaryBar,
               "w-full text-sm no-underline hover:text-white"
             )}
           >
-            Expertise manuelle
-          </a>
+            Retour à l&apos;accueil
+          </Link>
           <button
             type="button"
             onClick={() => {
@@ -1536,16 +1878,16 @@ export function EstimationForm() {
             }}
             className={uiLinkSubtle}
           >
-            Modifier
+            Modifier ma saisie
           </button>
         </div>
       </motion.div>
     );
   };
 
-  const toggleSecurity = (index: 0 | 1 | 2) => {
+  const toggleSecurity = (index: 0 | 1 | 2 | 3) => {
     setSecurityChecks((prev) => {
-      const next: [boolean, boolean, boolean] = [...prev];
+      const next: [boolean, boolean, boolean, boolean] = [...prev];
       next[index] = !next[index];
       return next;
     });
@@ -1570,12 +1912,12 @@ export function EstimationForm() {
         </Link>
         {flowPhase === "form" && (
           <span className="text-[11px] font-semibold tracking-tight text-slate-400 sm:text-xs">
-            Estimation
+            Estimation équipement
           </span>
         )}
         {flowPhase === "result" && (
           <span className="text-[11px] font-medium tracking-wide text-slate-400">
-            Résultat
+            Synthèse
           </span>
         )}
         {flowPhase === "analyzing" && (
@@ -1597,7 +1939,7 @@ export function EstimationForm() {
               ? `Progression : étape ${step} sur ${TOTAL_STEPS}`
               : flowPhase === "analyzing"
                 ? "Analyse en cours"
-                : "Terminé"
+                : "Parcours terminé"
           }
         >
           <motion.div
@@ -1724,222 +2066,295 @@ export function EstimationForm() {
                   )}
 
                   {step === 2 && (
-                    <div
-                      ref={brandBoxRef}
-                      className="flex w-full flex-col items-center"
+                    <motion.div
+                      ref={brandPanelRef}
+                      layout
+                      transition={springTransition}
+                      className="relative mx-auto flex w-full max-w-xl flex-col px-0.5 sm:max-w-2xl"
                     >
                       {brandsLoading ? (
                         <BrandsSkeleton />
                       ) : (
-                        <div className="relative w-full max-w-xl">
-                          <label htmlFor="brand-search" className="sr-only">
-                            Rechercher une marque
-                          </label>
-                          <input
-                            id="brand-search"
-                            ref={brandSearchRef}
-                            type="text"
-                            value={brand}
-                            onChange={(e) => {
-                              setBrand(e.target.value);
-                              setBrandOpen(true);
-                            }}
-                            onFocus={() => setBrandOpen(true)}
-                            placeholder="Ex. Shoei, Arai…"
-                            autoComplete="off"
-                            role="combobox"
-                            aria-expanded={brandOpen}
-                            aria-controls="brand-command-list"
-                            className={cn(
-                              uiInput,
-                              "h-[3.75rem] w-full px-6 sm:h-20 sm:px-8",
-                              "text-xl font-medium tracking-tight sm:text-2xl",
-                              "placeholder:font-normal",
-                              stepHint &&
-                                !canGoNext &&
-                                step === 2 &&
-                                "ring-2 ring-amber-200/80"
-                            )}
-                          />
-                          {brandOpen &&
-                            brandChoices.length > 0 &&
-                            !brandsLoading && (
-                              <ul
-                                id="brand-command-list"
-                                role="listbox"
-                                className="absolute left-0 right-0 top-full z-10 mt-2 max-h-[min(50vh,22rem)] overflow-auto rounded-3xl border border-slate-200 bg-white py-1 shadow-sm"
-                              >
-                                {brandChoices.map((b) => (
-                                  <li
-                                    key={b}
-                                    role="option"
-                                    aria-selected={
-                                      b.toLowerCase() ===
-                                      brand.trim().toLowerCase()
-                                    }
-                                  >
-                                    <button
-                                      type="button"
-                                      className="w-full px-6 py-3.5 text-left text-base font-medium tracking-tight text-slate-800 hover:bg-slate-50"
-                                      onClick={() => {
-                                        setBrand(b);
-                                        setBrandOpen(false);
-                                        brandSearchRef.current?.blur();
-                                      }}
+                        <div
+                          className={cn(
+                            "overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_14px_44px_-18px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/[0.035]",
+                            stepHint &&
+                              !canGoNext &&
+                              "ring-2 ring-amber-300/70 ring-offset-2 ring-offset-slate-50"
+                          )}
+                        >
+                          <div className="flex min-h-[3.5rem] items-stretch divide-x divide-slate-100 sm:min-h-16">
+                            <div className="flex w-[3.35rem] shrink-0 items-center justify-center bg-slate-50/95 sm:w-14">
+                              <MagnifyingGlass
+                                className="size-6 text-emerald-600"
+                                weight="duotone"
+                                aria-hidden
+                              />
+                            </div>
+                            <div className="flex min-w-0 flex-1 items-center px-3 py-2.5 sm:px-4">
+                              <label htmlFor="brand-search" className="sr-only">
+                                Marque
+                              </label>
+                              <input
+                                id="brand-search"
+                                ref={brandSearchRef}
+                                type="text"
+                                value={brand}
+                                onChange={(e) => {
+                                  setBrand(e.target.value);
+                                  setCatalogSlug(null);
+                                  setBrandOpen(true);
+                                }}
+                                onFocus={() => setBrandOpen(true)}
+                                placeholder="Marque…"
+                                autoComplete="off"
+                                role="combobox"
+                                aria-expanded={brandOpen}
+                                aria-controls="brand-command-list"
+                                className="w-full min-w-0 border-0 bg-transparent text-[17px] font-medium tracking-tight text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 sm:text-lg"
+                              />
+                            </div>
+                          </div>
+                          <AnimatePresence initial={false}>
+                            {brandOpen &&
+                              brandChoices.length > 0 &&
+                              !brandsLoading && (
+                                <motion.ul
+                                  id="brand-command-list"
+                                  layout
+                                  role="listbox"
+                                  initial={{ opacity: 0, y: -12 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -10 }}
+                                  transition={{
+                                    type: "spring",
+                                    stiffness: 380,
+                                    damping: 32,
+                                  }}
+                                  className="max-h-[min(50svh,17.5rem)] divide-y divide-slate-100 overflow-y-auto overscroll-contain border-t border-slate-100 bg-slate-50/45"
+                                >
+                                  {brandChoices.map((b) => (
+                                    <li
+                                      key={b}
+                                      role="option"
+                                      aria-selected={
+                                        b.toLowerCase() ===
+                                        brand.trim().toLowerCase()
+                                      }
                                     >
-                                      {b}
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
+                                      <button
+                                        type="button"
+                                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white active:bg-emerald-50/50 sm:px-4 sm:py-3"
+                                        onClick={() => {
+                                          setBrand(b);
+                                          setCatalogSlug(null);
+                                          setBrandOpen(false);
+                                          brandSearchRef.current?.blur();
+                                        }}
+                                      >
+                                        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold text-emerald-800 shadow-sm ring-1 ring-slate-200/70">
+                                          {b.slice(0, 1).toUpperCase()}
+                                        </span>
+                                        <span className="truncate text-[15px] font-medium text-slate-800 sm:text-base">
+                                          {b}
+                                        </span>
+                                      </button>
+                                    </li>
+                                  ))}
+                                </motion.ul>
+                              )}
+                          </AnimatePresence>
                         </div>
                       )}
-                    </div>
+                    </motion.div>
                   )}
 
                   {step === 3 && (
-                    <div className="flex w-full min-h-0 flex-col items-center gap-8 touch-pan-y sm:gap-10">
-                      {!manualEntry ? (
-                        <>
-                          {modelsLoading ? (
-                            <ModelsSkeleton />
-                          ) : catalogModels.length === 0 ? (
-                            <p className="max-w-md text-center text-sm leading-relaxed text-slate-500">
-                              Aucun modèle indexé pour cette marque. Nous
-                              complétons le catalogue régulièrement — en attendant,
-                              utilisez la saisie manuelle.
-                            </p>
-                          ) : (
-                            <div className="grid w-full max-w-3xl grid-cols-2 gap-4 touch-pan-y sm:grid-cols-3 sm:gap-5">
-                              {catalogModels.map((row) => {
-                                const picked =
-                                  catalogModelSelecting === row.canonical_slug;
-                                return (
-                                  <motion.button
-                                    key={row.id}
-                                    type="button"
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => selectCatalogModel(row)}
-                                    className={cn(
-                                      uiCard,
-                                      uiCardLift,
-                                      "touch-pan-y flex flex-col gap-2 border-2 p-3 text-left transition-colors",
-                                      picked
-                                        ? "border-emerald-500 shadow-md ring-1 ring-emerald-500/25"
-                                        : "border-slate-200 hover:border-slate-300"
-                                    )}
-                                  >
-                                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-50">
-                                      {row.image_url ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                          src={row.image_url}
-                                          alt=""
-                                          className="size-full object-contain"
-                                        />
-                                      ) : (
-                                        <div className="flex size-full items-center justify-center text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                                          Photo
-                                        </div>
-                                      )}
-                                      {picked && (
-                                        <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
-                                          <Check className="size-4" weight="bold" />
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="line-clamp-2 text-center text-[13px] font-medium leading-snug tracking-tight text-slate-800 sm:text-sm">
-                                      {row.model}
-                                    </span>
-                                  </motion.button>
-                                );
-                              })}
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={startManualModelEntry}
-                            className="text-sm font-medium tracking-wide text-slate-500 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-900 hover:decoration-slate-900"
-                          >
-                            Saisie manuelle (marque + modèle)
-                          </button>
-                        </>
-                      ) : (
-                        <div className="flex w-full flex-col items-center">
-                          <p className="mb-4 max-w-md text-center text-sm text-slate-500">
-                            Décrivez la référence : nos experts alignent sur le
-                            catalogue lorsque c’est possible.
-                          </p>
-                          <div className="relative w-full max-w-xl">
+                    <motion.div
+                      ref={modelPanelRef}
+                      layout
+                      transition={springTransition}
+                      className="mx-auto flex w-full max-w-xl flex-col gap-5 sm:max-w-2xl"
+                    >
+                      <motion.div
+                        layout
+                        className="rounded-2xl border border-emerald-200/55 bg-emerald-50/40 px-4 py-3.5 text-center text-sm font-medium text-emerald-950"
+                      >
+                        Marque sélectionnée :{" "}
+                        <span className="font-semibold text-emerald-900">
+                          {resolvedBrandLabel || brand.trim() || "—"}
+                        </span>
+                      </motion.div>
+                      <div
+                        className={cn(
+                          "overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_14px_44px_-18px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/[0.035]",
+                          stepHint &&
+                            !canGoNext &&
+                            "ring-2 ring-amber-300/70 ring-offset-2 ring-offset-slate-50"
+                        )}
+                      >
+                        <div className="flex min-h-[3.5rem] items-stretch divide-x divide-slate-100 sm:min-h-16">
+                          <div className="flex w-[3.35rem] shrink-0 items-center justify-center bg-slate-50/95 sm:w-14">
+                            <Package
+                              className="size-6 text-teal-600"
+                              weight="duotone"
+                              aria-hidden
+                            />
+                          </div>
+                          <div className="flex min-w-0 flex-1 items-center px-3 py-2.5 sm:px-4">
+                            <label htmlFor="model-search" className="sr-only">
+                              Modèle
+                            </label>
                             <input
+                              id="model-search"
                               ref={modelInputRef}
                               type="text"
-                              value={combinedModelValue}
+                              value={model}
                               onChange={(e) => {
-                                setFromCombined(e.target.value);
-                                setBrandOpen(true);
+                                setModel(e.target.value);
+                                setCatalogSlug(null);
+                                setModelOpen(true);
                               }}
-                              onFocus={() => setBrandOpen(true)}
-                              placeholder="Marque et modèle · ex. Shoei NXR2"
+                              onFocus={() => setModelOpen(true)}
+                              placeholder="Modèle ou référence…"
                               autoComplete="off"
-                              className={cn(
-                                uiInput,
-                                "h-[3.75rem] w-full px-6 sm:h-20 sm:px-8",
-                                "text-xl font-medium tracking-tight sm:text-2xl",
-                                "placeholder:font-normal",
-                                stepHint &&
-                                  (!brand.trim() || !model.trim()) &&
-                                  "ring-2 ring-amber-200/80"
-                              )}
+                              role="combobox"
+                              aria-expanded={modelOpen}
+                              aria-controls="model-command-list"
+                              className="w-full min-w-0 border-0 bg-transparent text-[17px] font-medium tracking-tight text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 sm:text-lg"
                             />
-                            {brandOpen && brandSuggestions.length > 0 && (
-                              <ul className="absolute left-0 right-0 top-full z-10 mt-2 max-h-[min(50vh,22rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white py-1 shadow-sm">
-                                {brandSuggestions.map((b) => (
-                                  <li key={b}>
-                                    <button
-                                      type="button"
-                                      className="w-full px-6 py-3.5 text-left text-base font-medium tracking-tight text-slate-800 hover:bg-slate-50"
-                                      onClick={() => {
-                                        const rest = model.trim();
-                                        setBrand(b);
-                                        setModel(rest);
-                                        setBrandOpen(false);
-                                        modelInputRef.current?.focus();
-                                      }}
-                                    >
-                                      {b}
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
                           </div>
-                          <input
-                            type="text"
-                            value={declinaison}
-                            onChange={(e) => setDeclinaison(e.target.value)}
-                            placeholder="Déclinaison (optionnel)"
-                            className={cn(
-                              uiInput,
-                              "mt-5 h-12 w-full max-w-xl bg-slate-50/50 text-center text-base tracking-wide sm:mt-6"
-                            )}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setManualEntry(false);
-                              setBrandOpen(false);
-                              setModel("");
-                              setCatalogSlug(null);
-                            }}
-                            className="mt-4 text-sm font-medium text-slate-500 underline underline-offset-4 hover:text-slate-900"
-                          >
-                            Retour à la liste catalogue
-                          </button>
                         </div>
-                      )}
-                    </div>
+                        <AnimatePresence initial={false}>
+                          {modelOpen && (
+                            <motion.div
+                              key="model-suggest"
+                              layout
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={springTransition}
+                              className="border-t border-slate-100 bg-slate-50/45"
+                            >
+                              {modelsLoading ? (
+                                <div className="flex items-center gap-3 px-4 py-4 sm:px-5">
+                                  <span className="size-12 shrink-0 animate-pulse rounded-2xl bg-slate-200/90" />
+                                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                    <span className="h-3 w-[55%] animate-pulse rounded-md bg-slate-200/85" />
+                                    <span className="h-3 w-[38%] animate-pulse rounded-md bg-slate-200/65" />
+                                  </div>
+                                </div>
+                              ) : modelSuggestions.length === 0 ? (
+                                <p className="px-4 py-4 text-sm leading-relaxed text-slate-600 sm:px-5">
+                                  Pas de fiche catalogue pour cette recherche.
+                                  Saisissez librement : nous activerons le
+                                  marché (visuels et prix neuf).
+                                </p>
+                              ) : (
+                                <ul
+                                  id="model-command-list"
+                                  role="listbox"
+                                  className="max-h-[min(50svh,19rem)] divide-y divide-slate-100 overflow-y-auto overscroll-contain"
+                                >
+                                  {modelSuggestions.map((row, idx) => {
+                                    const picked =
+                                      catalogSlug === row.canonical_slug;
+                                    const activePick =
+                                      catalogModelSelecting ===
+                                      row.canonical_slug;
+                                    return (
+                                      <motion.li
+                                        key={row.id}
+                                        layout
+                                        role="option"
+                                        aria-selected={picked}
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{
+                                          type: "spring",
+                                          stiffness: 400,
+                                          damping: 34,
+                                          delay: idx * 0.028,
+                                        }}
+                                      >
+                                        <button
+                                          type="button"
+                                          className={cn(
+                                            "flex w-full items-center gap-3 px-3 py-2 text-left sm:gap-3.5 sm:px-4 sm:py-2.5",
+                                            picked || activePick
+                                              ? "bg-emerald-50/95"
+                                              : "hover:bg-white"
+                                          )}
+                                          onClick={() =>
+                                            selectCatalogModel(row)
+                                          }
+                                        >
+                                          <div className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 sm:size-14">
+                                            {row.image_url ? (
+                                              // eslint-disable-next-line @next/next/no-img-element
+                                              <img
+                                                src={row.image_url}
+                                                alt=""
+                                                className="size-full object-contain"
+                                              />
+                                            ) : (
+                                              <div className="flex size-full items-center justify-center text-[10px] font-semibold text-slate-400">
+                                                —
+                                              </div>
+                                            )}
+                                            {picked && (
+                                              <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
+                                                <Check
+                                                  className="size-3"
+                                                  weight="bold"
+                                                />
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-slate-800 sm:text-base">
+                                            {row.model}
+                                          </span>
+                                        </button>
+                                      </motion.li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                      <label htmlFor="declinaison-field" className="sr-only">
+                        Déclinaison
+                      </label>
+                      <input
+                        id="declinaison-field"
+                        type="text"
+                        value={declinaison}
+                        onChange={(e) => setDeclinaison(e.target.value)}
+                        placeholder="Déclinaison · couleur, série… (optionnel)"
+                        autoComplete="off"
+                        className={cn(
+                          uiInput,
+                          "h-11 w-full rounded-2xl border-slate-200/90 bg-white text-[15px] sm:h-12"
+                        )}
+                      />
+                      <div className="flex min-h-9 justify-center text-center">
+                        {catalogSlug ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-900 ring-1 ring-emerald-200/80">
+                            <Check
+                              className="size-3.5 text-emerald-600"
+                              weight="bold"
+                            />
+                            Fiche liée — enchaînement sur la patine
+                          </span>
+                        ) : model.trim() ? (
+                          <span className="text-xs text-slate-500">
+                            Saisie libre — patine à l’étape suivante.
+                          </span>
+                        ) : null}
+                      </div>
+                    </motion.div>
                   )}
 
                   {step === 4 && (
@@ -1947,7 +2362,7 @@ export function EstimationForm() {
                       <div
                         className="flex flex-col gap-4 sm:gap-5"
                         role="radiogroup"
-                        aria-label="État général de l’article"
+                        aria-label="Niveau de patine du matériel"
                       >
                         {conditionOptions.map(({ id, label, help }, i) => {
                           const picking = condSelecting === id;
@@ -2010,13 +2425,48 @@ export function EstimationForm() {
                   {step === 5 && (
                     <div className="mx-auto flex w-full max-w-xl flex-col sm:max-w-2xl">
                       <p className="mb-8 text-center text-sm leading-relaxed text-slate-500 sm:mb-10">
-                        Ces infos permettent d’ajuster le prix au plus juste.
+                        Ces repères affinent la fourchette au plus près du terrain.
                         <span className="mt-1 block text-xs text-slate-400">
-                          « Moyen » couvre déjà les défauts visibles importants.
+                          « Patine marquée » inclut déjà les défauts visibles sérieux.
                         </span>
                       </p>
 
                       <div className="flex flex-col gap-9 sm:gap-10">
+                        <div className="space-y-3" aria-labelledby="purchase-year-h">
+                          <label
+                            id="purchase-year-h"
+                            htmlFor="purchase-year"
+                            className="block text-sm font-medium text-slate-800"
+                          >
+                            Année d&apos;achat
+                          </label>
+                          <select
+                            id="purchase-year"
+                            value={purchaseYear ?? ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setPurchaseYear(v === "" ? null : Number(v));
+                            }}
+                            className={cn(
+                              uiInput,
+                              "h-[3.75rem] w-full cursor-pointer appearance-none bg-white px-6 text-center text-xl font-medium tracking-tight sm:h-20 sm:px-8 sm:text-2xl",
+                              stepHint &&
+                                purchaseYear == null &&
+                                "ring-2 ring-amber-200/80"
+                            )}
+                          >
+                            <option value="">Choisir l&apos;année</option>
+                            {purchaseYearChoices.map((y) => (
+                              <option key={y} value={y}>
+                                {y}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-center text-xs leading-relaxed text-slate-500">
+                            Sert à vérifier les limites de rachat pour votre sécurité.
+                          </p>
+                        </div>
+
                         {equipment === "casque" && (
                           <>
                             <div
@@ -2143,7 +2593,7 @@ export function EstimationForm() {
                             id="complete-h"
                             className="text-sm font-medium text-slate-800"
                           >
-                            Contenu de la vente
+                            Contenu transmis avec l’équipement
                           </p>
                           <div className="flex flex-col gap-2.5">
                             {COMPLETENESS_OPTIONS.map((o) => (
@@ -2207,22 +2657,38 @@ export function EstimationForm() {
                             aria-hidden
                           />
                           <p className={cn(uiBody)}>
-                            Pour cette catégorie, aucune déclaration additionnelle
-                            n’est requise au-delà de votre honnêteté habituelle.
+                            Pour cette famille d’équipement, aucune case
+                            supplémentaire n’est exigée : on s’appuie sur votre
+                            lecture honnête du matériel.
                           </p>
                         </div>
                       ) : (
                         <div className="flex w-full flex-col gap-3.5 sm:gap-4">
-                          {SECURITY_COPY.map((text, i) => {
-                            const on = securityChecks[i];
+                          {(
+                            [
+                              ...SECURITY_COPY.map((text, i) => ({
+                                text,
+                                index: i as 0 | 1 | 2,
+                              })),
+                              ...(equipment === "casque"
+                                ? [
+                                    {
+                                      text: PHYSICAL_INTEGRITY_COPY,
+                                      index: 3 as const,
+                                    },
+                                  ]
+                                : []),
+                            ] as const
+                          ).map(({ text, index }) => {
+                            const on = securityChecks[index];
                             return (
                               <motion.button
-                                key={i}
+                                key={index}
                                 type="button"
                                 whileTap={{ scale: 0.992 }}
                                 role="switch"
                                 aria-checked={on}
-                                onClick={() => toggleSecurity(i as 0 | 1 | 2)}
+                                onClick={() => toggleSecurity(index)}
                                 className={cn(
                                   "group flex w-full items-center gap-3.5 rounded-3xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:gap-5 sm:px-5 sm:py-4",
                                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/20 focus-visible:ring-offset-2",
@@ -2246,7 +2712,7 @@ export function EstimationForm() {
                                       weight="bold"
                                     />
                                   ) : (
-                                    String(i + 1).padStart(2, "0")
+                                    String(index + 1).padStart(2, "0")
                                   )}
                                 </div>
                                 <span className="min-w-0 flex-1 text-[15px] font-medium leading-snug tracking-wide text-slate-800 sm:text-base">
@@ -2321,7 +2787,7 @@ export function EstimationForm() {
                     disabled={!canSubmitEstimation}
                     className={uiBtnPrimaryBar}
                   >
-                    Obtenir le prix
+                    Lancer l’analyse
                   </button>
                 )}
               </footer>
@@ -2331,7 +2797,18 @@ export function EstimationForm() {
 
         {flowPhase === "result" && (
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            {submitError && estimateResult?.kind === "fallback" && (
+              <div className="shrink-0 px-5 pt-4 sm:px-8">
+                <p
+                  className="rounded-3xl border border-red-200 bg-red-50 px-3 py-2.5 text-center text-xs font-medium text-red-900 shadow-sm"
+                  role="alert"
+                >
+                  {submitError}
+                </p>
+              </div>
+            )}
             {estimateResult?.kind === "offer" && renderResultOffer()}
+            {estimateResult?.kind === "too_old" && renderResultTooOld()}
             {estimateResult?.kind === "fallback" && renderResultFallback()}
           </div>
         )}
